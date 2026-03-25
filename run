@@ -3,7 +3,8 @@ set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 STOW_TARGET="$HOME"
-PACKAGES=("agents")
+PACKAGES=("claude")
+BACKUP_DIR="$STOW_TARGET/.claude.bak"
 
 # Colors
 RED='\033[0;31m'
@@ -51,13 +52,49 @@ check_deps() {
   fi
 }
 
+backup_existing() {
+  local needs_backup=false
+
+  for dir in agents commands; do
+    local target="$STOW_TARGET/.claude/$dir"
+    if [[ -d "$target" ]] && find "$target" -maxdepth 1 -type f -name '*.md' | grep -q .; then
+      needs_backup=true
+      break
+    fi
+  done
+
+  if [[ "$needs_backup" == false ]]; then
+    return 0
+  fi
+
+  warn "Existing config found in ~/.claude/"
+
+  if [[ -d "$BACKUP_DIR" ]]; then
+    info "Backup already exists at $BACKUP_DIR, skipping."
+    return 0
+  fi
+
+  if gum confirm "Back up ~/.claude/{agents,commands} to ~/.claude.bak ?"; then
+    cp -r "$STOW_TARGET/.claude" "$BACKUP_DIR"
+    info "Backup saved to $BACKUP_DIR"
+  else
+    warn "Proceeding without backup."
+  fi
+}
+
 do_install() {
+  backup_existing
+
   info "Installing claude skills..."
   for pkg in "${PACKAGES[@]}"; do
     info "Stowing $pkg..."
     stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
     stow -t "$STOW_TARGET" -d "$REPO_DIR" --adopt "$pkg"
   done
+
+  # --adopt pulls target files into repo, restore repo state
+  git -C "$REPO_DIR" checkout -- .
+
   info "Done! Skills installed to ~/.claude/"
 }
 
