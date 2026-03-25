@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+STOW_TARGET="$HOME"
+PACKAGES=("agents")
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+info()  { echo -e "${GREEN}[info]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[warn]${NC} $1"; }
+error() { echo -e "${RED}[error]${NC} $1"; }
+
+check_deps() {
+  local missing=()
+
+  if ! command -v gum &>/dev/null; then
+    missing+=("gum")
+  fi
+
+  if ! command -v stow &>/dev/null; then
+    missing+=("stow")
+  fi
+
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    info "All dependencies are installed."
+    return 0
+  fi
+
+  warn "Missing dependencies: ${missing[*]}"
+
+  if ! command -v brew &>/dev/null; then
+    error "Homebrew is required to install dependencies: https://brew.sh"
+    exit 1
+  fi
+
+  echo ""
+  read -rp "Install missing dependencies with brew? [y/N] " answer
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    for dep in "${missing[@]}"; do
+      info "Installing $dep..."
+      brew install "$dep"
+    done
+  else
+    error "Cannot continue without: ${missing[*]}"
+    exit 1
+  fi
+}
+
+do_install() {
+  info "Installing claude skills..."
+  for pkg in "${PACKAGES[@]}"; do
+    info "Stowing $pkg..."
+    stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
+    stow -t "$STOW_TARGET" -d "$REPO_DIR" --adopt "$pkg"
+  done
+  info "Done! Skills installed to ~/.claude/"
+}
+
+do_uninstall() {
+  info "Uninstalling claude skills..."
+  for pkg in "${PACKAGES[@]}"; do
+    info "Unstowing $pkg..."
+    stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
+  done
+  info "Done! Skills removed."
+}
+
+main() {
+  echo "=== Claude Skills Manager ==="
+  echo ""
+
+  check_deps
+
+  local selection
+  selection=$(gum choose \
+    --header "Select an action:" \
+    "Install skills" \
+    "Uninstall skills") || true
+
+  [[ -z "$selection" ]] && echo "Nothing selected." && exit 0
+
+  case "$selection" in
+    "Install skills")
+      do_install
+      ;;
+    "Uninstall skills")
+      do_uninstall
+      ;;
+  esac
+}
+
+main
