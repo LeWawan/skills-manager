@@ -11,7 +11,7 @@ git clone <repo-url> && cd claude-skills
 
 The interactive menu will guide you through dependency installation and setup.
 
-If you already have files in `~/.claude/agents/` or `~/.claude/commands/`, the script will offer to back them up to `~/.claude.bak/` before installing.
+If you already have files in managed directories (`agents/`, `commands/`), the script will offer to back them up to `~/.claude.bak/` before installing. User files that don't conflict with repo skills are automatically restored after stow. On uninstall, the backup is fully restored.
 
 ### Dependencies
 
@@ -116,14 +116,21 @@ claude-skills/
   run                              # installer script
 ```
 
-Running `./run` > **Install skills** symlinks everything into `~/.claude/`:
+Running `./run` > **Install skills**:
+
+1. Backs up existing managed dirs to `~/.claude.bak/` (if any real files are present)
+2. Removes real dirs so stow can create clean **directory symlinks** (tree folding)
+3. Stows the package — each dir becomes a single symlink to the repo
+4. Restores user files from backup that don't conflict with repo skills
 
 ```
-~/.claude/agents/ruby-rails.md  →  claude-skills/claude/.claude/agents/ruby-rails.md
-~/.claude/commands/api-design.md  →  claude-skills/claude/.claude/commands/api-design.md
+~/.claude/agents   →  claude-skills/claude/.claude/agents/
+~/.claude/commands →  claude-skills/claude/.claude/commands/
 ```
 
-To remove all symlinks: `./run` > **Uninstall skills**.
+Because stow uses directory symlinks, any new skill added to the repo is **instantly available** — no re-install needed.
+
+To remove all symlinks and restore your original files: `./run` > **Uninstall skills**.
 
 ## Adding Your Own
 
@@ -150,7 +157,7 @@ Your agent system prompt here.
 
 Create `claude/.claude/commands/my-command.md` with a skill prompt. Invoke with `/my-command`.
 
-Then re-run `./run` > **Install skills**.
+Then re-run `./run` > **Install skills** (or just `git pull` if already installed — tree folding means new files appear automatically).
 
 ## Credits
 
