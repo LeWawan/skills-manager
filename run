@@ -52,13 +52,18 @@ check_deps() {
   fi
 }
 
+# List dirs managed by stow (from repo content)
+managed_dirs() {
+  find "$REPO_DIR/claude/.claude" -maxdepth 1 -mindepth 1 -type d -exec basename {} \;
+}
+
 backup_existing() {
   local claude_dir="$STOW_TARGET/.claude"
   local has_real_dirs=false
 
-  for dir in "$claude_dir"/*/; do
-    [[ -d "$dir" && ! -L "$dir" ]] && has_real_dirs=true && break
-  done
+  while read -r dir; do
+    [[ -d "$claude_dir/$dir" && ! -L "$claude_dir/$dir" ]] && has_real_dirs=true && break
+  done < <(managed_dirs)
 
   if [[ "$has_real_dirs" == false ]]; then
     return 0
@@ -72,27 +77,30 @@ backup_existing() {
 
   warn "Existing config found in ~/.claude/"
 
-  if gum confirm "Back up ~/.claude/ to ~/.claude.bak ?"; then
-    cp -r "$claude_dir" "$BACKUP_DIR"
+  if gum confirm "Back up managed dirs to ~/.claude.bak ?"; then
+    mkdir -p "$BACKUP_DIR"
+    while read -r dir; do
+      [[ -d "$claude_dir/$dir" && ! -L "$claude_dir/$dir" ]] && cp -r "$claude_dir/$dir" "$BACKUP_DIR/$dir"
+    done < <(managed_dirs)
     info "Backup saved to $BACKUP_DIR"
   else
     warn "Proceeding without backup."
   fi
 
   # Remove real dirs so stow can do clean tree folding
-  for dir in "$claude_dir"/*/; do
-    [[ -d "$dir" && ! -L "$dir" ]] && rm -rf "$dir"
-  done
+  while read -r dir; do
+    [[ -d "$claude_dir/$dir" && ! -L "$claude_dir/$dir" ]] && rm -rf "$claude_dir/$dir"
+  done < <(managed_dirs)
 }
 
 # Copy back user files from backup that don't exist in stowed dirs
 restore_user_files() {
-  [[ ! -d "$BACKUP_DIR/.claude" ]] && return 0
+  [[ ! -d "$BACKUP_DIR" ]] && return 0
 
   local claude_dir="$STOW_TARGET/.claude"
   local count=0
 
-  for backup_dir in "$BACKUP_DIR/.claude"/*/; do
+  for backup_dir in "$BACKUP_DIR"/*/; do
     [[ ! -d "$backup_dir" ]] && continue
     local dirname
     dirname=$(basename "$backup_dir")
@@ -135,6 +143,14 @@ do_uninstall() {
     info "Unstowing $pkg..."
     stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
   done
+
+  if [[ -d "$BACKUP_DIR" ]]; then
+    info "Restoring backup from $BACKUP_DIR..."
+    cp -r "$BACKUP_DIR"/* "$STOW_TARGET/.claude/"
+    rm -rf "$BACKUP_DIR"
+    info "Backup restored and removed."
+  fi
+
   info "Done! Skills removed."
 }
 
