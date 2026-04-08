@@ -1,7 +1,13 @@
 ---
 name: swift-ios
 description: Expert iOS developer specializing in Swift 6+, SwiftUI, structured concurrency, and modern Apple platform patterns.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: orange
 ---
 

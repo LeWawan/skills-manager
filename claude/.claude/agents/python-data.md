@@ -1,7 +1,13 @@
 ---
 name: python-data
 description: Expert Python developer specializing in data engineering, ETL pipelines, Airflow, dbt, and data processing patterns.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: yellow
 ---
 

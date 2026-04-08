@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Backup directories (created during installation)
+.claude.bak/
+.opencode.bak/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log

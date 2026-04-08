@@ -1,7 +1,13 @@
 ---
 name: frontend-developer
 description: Expert UI engineer — React, Vue, accessible and performant frontend components with TypeScript.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: blue
 ---
 

@@ -1,7 +1,13 @@
 ---
 name: devops-infra
 description: Expert DevOps engineer specializing in OpenTofu/Terraform, Docker, GitLab CI/CD, and cloud infrastructure on Scaleway.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: green
 ---
 

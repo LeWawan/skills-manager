@@ -3,8 +3,9 @@ set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 STOW_TARGET="$HOME"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
+SELECTED_CLI=""
+PACKAGES=()
+BACKUP_DIR=""
 
 # Colors
 RED='\033[0;31m'
@@ -54,15 +55,20 @@ check_deps() {
 
 # List dirs managed by stow (from repo content)
 managed_dirs() {
-  find "$REPO_DIR/claude/.claude" -maxdepth 1 -mindepth 1 -type d -exec basename {} \;
+  local config_dir="$REPO_DIR/$SELECTED_CLI/.$SELECTED_CLI"
+  find "$config_dir" -maxdepth 1 -mindepth 1 -type d -exec basename {} \;
+}
+
+get_config_dir() {
+  echo "$STOW_TARGET/.$SELECTED_CLI"
 }
 
 backup_existing() {
-  local claude_dir="$STOW_TARGET/.claude"
+  local config_dir=$(get_config_dir)
   local has_real_dirs=false
 
   while read -r dir; do
-    [[ -d "$claude_dir/$dir" && ! -L "$claude_dir/$dir" ]] && has_real_dirs=true && break
+    [[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && has_real_dirs=true && break
   done < <(managed_dirs)
 
   if [[ "$has_real_dirs" == false ]]; then
@@ -75,12 +81,12 @@ backup_existing() {
     exit 1
   fi
 
-  warn "Existing config found in ~/.claude/"
+  warn "Existing config found in ~/.$SELECTED_CLI/"
 
-  if gum confirm "Back up managed dirs to ~/.claude.bak ?"; then
+  if gum confirm "Back up managed dirs to ~/.$SELECTED_CLI.bak ?"; then
     mkdir -p "$BACKUP_DIR"
     while read -r dir; do
-      [[ -d "$claude_dir/$dir" && ! -L "$claude_dir/$dir" ]] && cp -r "$claude_dir/$dir" "$BACKUP_DIR/$dir"
+      [[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && cp -r "$config_dir/$dir" "$BACKUP_DIR/$dir"
     done < <(managed_dirs)
     info "Backup saved to $BACKUP_DIR"
   else
@@ -89,7 +95,7 @@ backup_existing() {
 
   # Remove real dirs so stow can do clean tree folding
   while read -r dir; do
-    [[ -d "$claude_dir/$dir" && ! -L "$claude_dir/$dir" ]] && rm -rf "$claude_dir/$dir"
+    [[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && rm -rf "$config_dir/$dir"
   done < <(managed_dirs)
 }
 
@@ -97,14 +103,14 @@ backup_existing() {
 restore_user_files() {
   [[ ! -d "$BACKUP_DIR" ]] && return 0
 
-  local claude_dir="$STOW_TARGET/.claude"
+  local config_dir=$(get_config_dir)
   local count=0
 
   for backup_dir in "$BACKUP_DIR"/*/; do
     [[ ! -d "$backup_dir" ]] && continue
     local dirname
     dirname=$(basename "$backup_dir")
-    local target_dir="$claude_dir/$dirname"
+    local target_dir="$config_dir/$dirname"
 
     for file in "$backup_dir"/*; do
       [[ ! -f "$file" ]] && continue
@@ -125,7 +131,7 @@ restore_user_files() {
 do_install() {
   backup_existing
 
-  info "Installing claude skills..."
+  info "Installing $SELECTED_CLI skills..."
   for pkg in "${PACKAGES[@]}"; do
     info "Stowing $pkg..."
     stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
@@ -134,11 +140,11 @@ do_install() {
 
   restore_user_files
 
-  info "Done! Skills installed to ~/.claude/"
+  info "Done! Skills installed to ~/.$SELECTED_CLI/"
 }
 
 do_uninstall() {
-  info "Uninstalling claude skills..."
+  info "Uninstalling $SELECTED_CLI skills..."
   for pkg in "${PACKAGES[@]}"; do
     info "Unstowing $pkg..."
     stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
@@ -146,7 +152,8 @@ do_uninstall() {
 
   if [[ -d "$BACKUP_DIR" ]]; then
     info "Restoring backup from $BACKUP_DIR..."
-    cp -r "$BACKUP_DIR"/* "$STOW_TARGET/.claude/"
+    local config_dir=$(get_config_dir)
+    cp -r "$BACKUP_DIR"/* "$config_dir/"
     rm -rf "$BACKUP_DIR"
     info "Backup restored and removed."
   fi
@@ -155,20 +162,36 @@ do_uninstall() {
 }
 
 main() {
-  echo "=== Claude Skills Manager ==="
+  echo "=== Skills Manager for Claude Code & OpenCode ==="
   echo ""
 
   check_deps
 
-  local selection
-  selection=$(gum choose \
+  # Select CLI
+  SELECTED_CLI=$(gum choose \
+    --header "Select your CLI:" \
+    "claude" \
+    "opencode") || true
+
+  [[ -z "$SELECTED_CLI" ]] && echo "No CLI selected." && exit 0
+
+  # Set package and backup directory based on selection
+  PACKAGES=("$SELECTED_CLI")
+  BACKUP_DIR="$STOW_TARGET/.$SELECTED_CLI.bak"
+
+  info "Selected: $SELECTED_CLI"
+  echo ""
+
+  # Select action
+  local action
+  action=$(gum choose \
     --header "Select an action:" \
     "Install skills" \
     "Uninstall skills") || true
 
-  [[ -z "$selection" ]] && echo "Nothing selected." && exit 0
+  [[ -z "$action" ]] && echo "No action selected." && exit 0
 
-  case "$selection" in
+  case "$action" in
     "Install skills")
       do_install
       ;;

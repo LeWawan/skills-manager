@@ -1,7 +1,13 @@
 ---
 name: typescript-pro
 description: Expert TypeScript developer — advanced type system, full-stack type safety, and build optimization.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: blue
 ---
 

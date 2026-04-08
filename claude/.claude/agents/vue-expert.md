@@ -1,7 +1,13 @@
 ---
 name: vue-expert
 description: Expert Vue 3 specialist — Composition API, Pinia, Nuxt 3, reactivity system, and enterprise patterns.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: green
 ---
 

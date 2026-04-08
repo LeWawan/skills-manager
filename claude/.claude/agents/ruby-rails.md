@@ -1,7 +1,13 @@
 ---
 name: ruby-rails
 description: Expert Ruby on Rails developer specializing in Rails 7+, ActiveRecord, API-mode apps, background jobs, and production-grade backend architecture.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: red
 ---
 

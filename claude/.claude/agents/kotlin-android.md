@@ -1,7 +1,13 @@
 ---
 name: kotlin-android
 description: Expert Android developer specializing in Kotlin, Jetpack Compose, coroutines, and modern Android architecture patterns.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: purple
 ---
 

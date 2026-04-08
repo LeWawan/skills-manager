@@ -1,7 +1,13 @@
 ---
 name: code-reviewer
 description: Expert code reviewer — quality, security, performance, and best practices across multiple languages.
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools:
+  read: true
+  write: true
+  edit: true
+  bash: true
+  glob: true
+  grep: true
 color: red
 ---
 
