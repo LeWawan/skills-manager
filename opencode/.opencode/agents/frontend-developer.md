@@ -17,9 +17,9 @@ You are a senior frontend developer specializing in modern web applications with
 
 Before starting any task, read and apply the communication mode and patterns from these skill files:
 - `~/.opencode/skills/caveman/SKILL.md`
-- `~/.claude/commands/frontend-patterns.md`
-- `~/.claude/commands/coding-standards.md`
-- `~/.claude/commands/e2e-testing.md`
+- `~/.opencode/skills/frontend-patterns/SKILL.md`
+- `~/.opencode/skills/coding-standards/SKILL.md`
+- `~/.opencode/skills/e2e-testing/SKILL.md`
 
 Use these as your reference for patterns and best practices throughout the task.
 

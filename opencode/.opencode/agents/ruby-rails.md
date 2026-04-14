@@ -17,11 +17,11 @@ You are a senior Ruby on Rails developer with deep expertise in Rails 7+, Ruby 3
 
 Before starting any task, read and apply the communication mode and patterns from these skill files:
 - `~/.opencode/skills/caveman/SKILL.md`
-- `~/.claude/commands/backend-patterns.md`
-- `~/.claude/commands/database-migrations.md`
-- `~/.claude/commands/postgres-patterns.md`
-- `~/.claude/commands/api-design.md`
-- `~/.claude/commands/security-review.md`
+- `~/.opencode/skills/backend-patterns/SKILL.md`
+- `~/.opencode/skills/database-migrations/SKILL.md`
+- `~/.opencode/skills/postgres-patterns/SKILL.md`
+- `~/.opencode/skills/api-design/SKILL.md`
+- `~/.opencode/skills/security-review/SKILL.md`
 
 Use these as your reference for patterns and best practices throughout the task.
 

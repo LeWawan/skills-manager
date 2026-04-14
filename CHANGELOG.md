@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.1.0] - 2026-04-14
+
+### Fixed
+- **OpenCode agent paths**: All 9 agents referenced `~/.claude/commands/*.md` instead of `~/.opencode/skills/*/SKILL.md` — skills were unreachable
+- **Recursive restore**: `restore_user_files` in `run` only restored top-level files; nested user subdirectories were lost after install
+- **node_modules stowed**: `managed_dirs` included `node_modules/` from local repo, causing stow to back up and restore 839+ files needlessly; now excluded via `-not -name node_modules` and `.stow-local-ignore`
+- **Caveman FR section**: Cleaned up franglais in the French section while keeping technical terms in English
+- **Doc accuracy**: README and STRUCTURE claimed 23 commands; actual count is 26 (3 `shape-up*` were undocumented)
+- **MIGRATION.md**: Stated "all commands available as skills" — corrected to "23 of 26" (shape-up excluded)
+- **convert-to-skills.sh**: Added pruning of orphan skills that no longer have a matching command
+- **test_run.sh**: Fixed `set -e` incompatibility with `[[ ]] && action` patterns in backup_existing
+
+### Added
+- **Unit tests**: `test_run.sh` with 24 tests covering `managed_dirs`, `get_config_dir`, `backup_existing`, `restore_user_files` (recursive + nested), `do_install`, `do_uninstall`, and full opencode cycle
+- **Root .gitignore**: OpenCode runtime artifacts (`node_modules/`, `package.json`, `package-lock.json`, `bun.lock`, `.gitignore`) properly ignored at repo level
+- **`.stow-local-ignore`**: Tells stow to skip runtime artifacts in the opencode package
+
+### Changed
+- **README.md**: Corrected command count to 26, documented `shape-up*` commands, differentiated Claude/OpenCode bootstrap instructions
+- **STRUCTURE.md**: Fixed tree indentation, added missing files, corrected total to 93 files
+
 ## [2.0.0] - 2026-04-07
 
 ### Added

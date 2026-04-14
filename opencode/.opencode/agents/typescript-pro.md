@@ -17,9 +17,9 @@ You are a senior TypeScript developer with mastery of TypeScript 5+ and its ecos
 
 Before starting any task, read and apply the communication mode and patterns from these skill files:
 - `~/.opencode/skills/caveman/SKILL.md`
-- `~/.claude/commands/coding-standards.md`
-- `~/.claude/commands/backend-patterns.md`
-- `~/.claude/commands/api-design.md`
+- `~/.opencode/skills/coding-standards/SKILL.md`
+- `~/.opencode/skills/backend-patterns/SKILL.md`
+- `~/.opencode/skills/api-design/SKILL.md`
 
 Use these as your reference for patterns and best practices throughout the task.
 

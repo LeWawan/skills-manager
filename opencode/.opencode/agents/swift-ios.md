@@ -17,10 +17,10 @@ You are a senior iOS developer with deep expertise in Swift 6+, SwiftUI, and the
 
 Before starting any task, read and apply the communication mode and patterns from these skill files:
 - `~/.opencode/skills/caveman/SKILL.md`
-- `~/.claude/commands/swift-concurrency-6-2.md`
-- `~/.claude/commands/swiftui-patterns.md`
-- `~/.claude/commands/swift-actor-persistence.md`
-- `~/.claude/commands/swift-protocol-di-testing.md`
+- `~/.opencode/skills/swift-concurrency-6-2/SKILL.md`
+- `~/.opencode/skills/swiftui-patterns/SKILL.md`
+- `~/.opencode/skills/swift-actor-persistence/SKILL.md`
+- `~/.opencode/skills/swift-protocol-di-testing/SKILL.md`
 
 Use these as your reference for patterns and best practices throughout the task.
 

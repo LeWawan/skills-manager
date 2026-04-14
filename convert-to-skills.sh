@@ -9,6 +9,9 @@ OPENCODE_SKILLS_DIR="opencode/.opencode/skills"
 # Ensure skills directory exists
 mkdir -p "$OPENCODE_SKILLS_DIR"
 
+# Track which skills should exist
+declare -A expected_skills
+
 # Process each command file
 for cmd_file in "$CLAUDE_COMMANDS_DIR"/*.md; do
 	# Get filename without extension
@@ -18,6 +21,8 @@ for cmd_file in "$CLAUDE_COMMANDS_DIR"/*.md; do
 	if [[ "$basename" == shape-up* ]]; then
 		continue
 	fi
+
+	expected_skills["$basename"]=1
 
 	# Create skill directory
 	skill_dir="$OPENCODE_SKILLS_DIR/$basename"
@@ -43,6 +48,16 @@ $(awk 'BEGIN{p=0} /^---$/{p++; next} p==2{print}' "$cmd_file")
 EOF
 
 	echo "✓ Created skill: $basename"
+done
+
+# Prune orphan skills that no longer have a matching command
+for skill_dir in "$OPENCODE_SKILLS_DIR"/*/; do
+	[[ ! -d "$skill_dir" ]] && continue
+	skill_name=$(basename "$skill_dir")
+	if [[ -z "${expected_skills[$skill_name]+x}" ]]; then
+		rm -rf "$skill_dir"
+		echo "✗ Removed orphan skill: $skill_name"
+	fi
 done
 
 echo ""

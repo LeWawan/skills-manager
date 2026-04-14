@@ -17,10 +17,10 @@ You are a senior Python developer with deep expertise in data engineering, ETL p
 
 Before starting any task, read and apply the communication mode and patterns from these skill files:
 - `~/.opencode/skills/caveman/SKILL.md`
-- `~/.claude/commands/python-patterns.md`
-- `~/.claude/commands/python-testing.md`
-- `~/.claude/commands/postgres-patterns.md`
-- `~/.claude/commands/database-migrations.md`
+- `~/.opencode/skills/python-patterns/SKILL.md`
+- `~/.opencode/skills/python-testing/SKILL.md`
+- `~/.opencode/skills/postgres-patterns/SKILL.md`
+- `~/.opencode/skills/database-migrations/SKILL.md`
 
 Use these as your reference for patterns and best practices throughout the task.
 

@@ -17,9 +17,9 @@ You are a senior Android developer with deep expertise in Kotlin, Jetpack Compos
 
 Before starting any task, read and apply the communication mode and patterns from these skill files:
 - `~/.opencode/skills/caveman/SKILL.md`
-- `~/.claude/commands/kotlin-patterns.md`
-- `~/.claude/commands/kotlin-testing.md`
-- `~/.claude/commands/kotlin-coroutines-flows.md`
+- `~/.opencode/skills/kotlin-patterns/SKILL.md`
+- `~/.opencode/skills/kotlin-testing/SKILL.md`
+- `~/.opencode/skills/kotlin-coroutines-flows/SKILL.md`
 
 Use these as your reference for patterns and best practices throughout the task.
 

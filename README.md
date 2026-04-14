@@ -27,9 +27,9 @@ Installed automatically if missing (requires [Homebrew](https://brew.sh)):
 
 ## Agents
 
-Specialized sub-agents invoked automatically by Claude Code and OpenCode. Each agent bootstraps by loading relevant slash commands as context.
+Specialized sub-agents invoked automatically by Claude Code and OpenCode. Claude agents bootstrap from slash commands; OpenCode agents bootstrap from skills.
 
-`caveman` is included as a bilingual English/French communication skill in the same file for both CLIs.
+`caveman` is included as a bilingual English/French communication skill in the same file for both CLIs. French mode keeps technical terms in English.
 
 | Agent | Stack | Auto-loads |
 |-------|-------|------------|
@@ -47,7 +47,7 @@ Specialized sub-agents invoked automatically by Claude Code and OpenCode. Each a
 
 Invoke with `/command-name` in Claude Code or OpenCode.
 
-> **Note**: For OpenCode users, these commands are also available as **Skills** in `.opencode/skills/` for on-demand loading via the `skill` tool.
+> **Note**: 23 of the 26 commands are also available as OpenCode **Skills** in `.opencode/skills/` for on-demand loading via the `skill` tool. The 3 `shape-up*` commands remain slash-command only.
 
 ### Swift / iOS
 
@@ -80,7 +80,7 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 | `/frontend-patterns` | React, Next.js, state management, performance |
 | `/nuxt4-patterns` | Nuxt 4 hydration safety, SSR-safe data fetching |
 | `/coding-standards` | Universal standards for TypeScript, React, Node.js |
-| `/caveman` | Ultra-compressed response mode for brief, high-signal communication, with English and French instructions in the same file |
+| `/caveman` | Ultra-compressed response mode, with English and French instructions in the same file. French mode keeps technical terms in English |
 
 ### Backend / API
 
@@ -107,6 +107,14 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 | `/deep-research` | Multi-source research with citations |
 | `/verification-loop` | Comprehensive verification system for Claude Code sessions |
 
+### Product / Planning
+
+| Command | Description |
+|---------|-------------|
+| `/shape-up` | Full Shape Up methodology for shaping, betting, and building |
+| `/shape-up-shape` | Shape raw ideas into ready-to-pitch projects |
+| `/shape-up-bet` | Run betting table and choose cycle work |
+
 ## How It Works
 
 ```
@@ -114,11 +122,11 @@ claude-skills/
   claude/                          # Claude Code stow package
     .claude/
       agents/                      # 9 agents → ~/.claude/agents/
-      commands/                    # 23 commands → ~/.claude/commands/
+      commands/                    # 26 commands → ~/.claude/commands/
   opencode/                        # OpenCode stow package
     .opencode/
       agents/                      # 9 agents → ~/.opencode/agents/
-      commands/                    # 23 commands → ~/.opencode/commands/
+      commands/                    # 26 commands → ~/.opencode/commands/
       skills/                      # 23 skills → ~/.opencode/skills/
         api-design/SKILL.md
         kotlin-patterns/SKILL.md
@@ -224,7 +232,7 @@ Then re-run `./run` > **Install skills** (or just `git pull` if already installe
 | **Commands** | `.claude/commands/*.md` | `.opencode/commands/*.md` |
 | **Skills** | ❌ Not supported | ✅ `.opencode/skills/*/SKILL.md` |
 | **Invocation** | Automatic by task type | `/command` or `skill` tool |
-| **Compatibility** | Claude-specific | Also supports `.claude/` paths |
+| **Agent bootstrap** | Command files in `~/.claude/commands/` | Skill files in `~/.opencode/skills/` |
 
 ### Skills vs Commands (OpenCode)
 
@@ -243,9 +251,11 @@ When you add or modify commands in `claude/.claude/commands/`, you can regenerat
 ./convert-to-skills.sh
 ```
 
-This script automatically converts Claude commands into OpenCode SKILL.md format.
+This script automatically converts Claude commands into OpenCode `SKILL.md` format.
 
-Note: `caveman` is maintained as a bilingual EN/FR skill in the same file for both command and SKILL variants.
+Current exception: `shape-up`, `shape-up-shape`, and `shape-up-bet` are intentionally skipped by the converter.
+
+Note: `caveman` is maintained as a bilingual EN/FR skill in the same file for both command and SKILL variants. French mode keeps technical terms in English.
 
 ## Credits
 

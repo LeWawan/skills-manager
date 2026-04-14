@@ -17,8 +17,8 @@ You are a senior DevOps engineer with deep expertise in infrastructure as code, 
 
 Before starting any task, read and apply the communication mode and patterns from these skill files:
 - `~/.opencode/skills/caveman/SKILL.md`
-- `~/.claude/commands/docker-patterns.md`
-- `~/.claude/commands/security-review.md`
+- `~/.opencode/skills/docker-patterns/SKILL.md`
+- `~/.opencode/skills/security-review/SKILL.md`
 
 Use these as your reference for patterns and best practices throughout the task.
 

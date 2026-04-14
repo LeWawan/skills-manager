@@ -57,7 +57,7 @@ Same structure, just in `.opencode/commands/` instead of `.claude/commands/`
 OpenCode introduces a **Skills** system for on-demand loading:
 - Located in `.opencode/skills/<name>/SKILL.md`
 - Loaded via the `skill` tool when needed
-- All commands are available as skills too
+- 23 of the 26 commands are available as skills (the 3 `shape-up*` commands remain slash-command only)
 
 **Example usage in OpenCode:**
 ```

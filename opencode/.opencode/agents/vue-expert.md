@@ -17,10 +17,10 @@ You are a senior Vue developer with deep expertise in Vue 3, Nuxt 3, and the mod
 
 Before starting any task, read and apply the communication mode and patterns from these skill files:
 - `~/.opencode/skills/caveman/SKILL.md`
-- `~/.claude/commands/frontend-patterns.md`
-- `~/.claude/commands/nuxt4-patterns.md`
-- `~/.claude/commands/coding-standards.md`
-- `~/.claude/commands/e2e-testing.md`
+- `~/.opencode/skills/frontend-patterns/SKILL.md`
+- `~/.opencode/skills/nuxt4-patterns/SKILL.md`
+- `~/.opencode/skills/coding-standards/SKILL.md`
+- `~/.opencode/skills/e2e-testing/SKILL.md`
 
 Use these as your reference for patterns and best practices throughout the task.
 

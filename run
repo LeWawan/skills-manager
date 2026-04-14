@@ -53,10 +53,12 @@ check_deps() {
   fi
 }
 
-# List dirs managed by stow (from repo content)
+# List dirs managed by stow (from repo content, excluding runtime artifacts)
 managed_dirs() {
   local config_dir="$REPO_DIR/$SELECTED_CLI/.$SELECTED_CLI"
-  find "$config_dir" -maxdepth 1 -mindepth 1 -type d -exec basename {} \;
+  find "$config_dir" -maxdepth 1 -mindepth 1 -type d \
+    -not -name node_modules \
+    -exec basename {} \;
 }
 
 get_config_dir() {
@@ -99,29 +101,24 @@ backup_existing() {
   done < <(managed_dirs)
 }
 
-# Copy back user files from backup that don't exist in stowed dirs
+# Copy back user files/dirs from backup that don't exist in stowed dirs (recursive)
 restore_user_files() {
   [[ ! -d "$BACKUP_DIR" ]] && return 0
 
   local config_dir=$(get_config_dir)
   local count=0
 
-  for backup_dir in "$BACKUP_DIR"/*/; do
-    [[ ! -d "$backup_dir" ]] && continue
-    local dirname
-    dirname=$(basename "$backup_dir")
-    local target_dir="$config_dir/$dirname"
-
-    for file in "$backup_dir"/*; do
-      [[ ! -f "$file" ]] && continue
-      local filename
-      filename=$(basename "$file")
-      if [[ ! -e "$target_dir/$filename" ]]; then
-        cp "$file" "$target_dir/$filename"
-        count=$((count + 1))
-      fi
-    done
-  done
+  while IFS= read -r -d '' src; do
+    local rel="${src#"$BACKUP_DIR"/}"
+    local dest="$config_dir/$rel"
+    if [[ -d "$src" ]]; then
+      [[ ! -d "$dest" ]] && mkdir -p "$dest"
+    elif [[ -f "$src" ]] && [[ ! -e "$dest" ]]; then
+      mkdir -p "$(dirname "$dest")"
+      cp "$src" "$dest"
+      count=$((count + 1))
+    fi
+  done < <(find "$BACKUP_DIR" -mindepth 2 -print0)
 
   if [[ $count -gt 0 ]]; then
     info "Restored $count user file(s) from backup"
@@ -130,6 +127,11 @@ restore_user_files() {
 
 do_install() {
   backup_existing
+
+  # Ensure config dir exists so stow doesn't tree-fold the top level.
+  # Without this, stow creates a single symlink (~/.opencode -> repo/...)
+  # which bypasses .stow-local-ignore and exposes runtime artifacts.
+  mkdir -p "$(get_config_dir)"
 
   info "Installing $SELECTED_CLI skills..."
   for pkg in "${PACKAGES[@]}"; do
@@ -153,6 +155,9 @@ do_uninstall() {
   if [[ -d "$BACKUP_DIR" ]]; then
     info "Restoring backup from $BACKUP_DIR..."
     local config_dir=$(get_config_dir)
+    # After unstow, config_dir may be a broken symlink — remove it first
+    [[ -L "$config_dir" ]] && rm "$config_dir"
+    mkdir -p "$config_dir"
     cp -r "$BACKUP_DIR"/* "$config_dir/"
     rm -rf "$BACKUP_DIR"
     info "Backup restored and removed."
