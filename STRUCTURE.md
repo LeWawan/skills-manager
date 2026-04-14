@@ -23,10 +23,11 @@ claude-skills/
 │       │   ├── typescript-pro.md
 │       │   └── vue-expert.md
 │       │
-│       └── commands/            # 22 slash commands
+│       └── commands/            # 23 slash commands
 │           ├── api-design.md
 │           ├── backend-patterns.md
 │           ├── coding-standards.md
+│           ├── caveman.md         # bilingual EN/FR skill in same file
 │           ├── database-migrations.md
 │           ├── deep-research.md
 │           ├── docker-patterns.md
@@ -52,16 +53,18 @@ claude-skills/
         ├── agents/              # 9 specialized agents (same as Claude)
         │   └── [same files as claude/agents/]
         │
-        ├── commands/            # 22 slash commands (same as Claude)
+        ├── commands/            # 23 slash commands (same as Claude)
         │   └── [same files as claude/commands/]
         │
-        └── skills/              # 22 skills (OpenCode-specific)
+        └── skills/              # 23 skills (OpenCode-specific)
             ├── api-design/
             │   └── SKILL.md
             ├── backend-patterns/
             │   └── SKILL.md
             ├── coding-standards/
             │   └── SKILL.md
+            ├── caveman/
+            │   └── SKILL.md       # bilingual EN/FR skill in same file
             ├── database-migrations/
             │   └── SKILL.md
             ├── deep-research/
@@ -120,7 +123,7 @@ claude-skills/
 ## File Counts
 
 - **Agents**: 9 (identical for both CLIs)
-- **Commands**: 22 (identical for both CLIs)
-- **Skills**: 22 (OpenCode only, converted from commands)
+- **Commands**: 23 (identical for both CLIs)
+- **Skills**: 23 (OpenCode only, converted from commands)
 
-Total: **53 skill files** across both CLIs
+Total: **56 skill files** across both CLIs

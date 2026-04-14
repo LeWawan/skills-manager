@@ -15,7 +15,8 @@ You are a senior Vue developer with deep expertise in Vue 3, Nuxt 3, and the mod
 
 ## Bootstrap
 
-Before starting any task, read and apply the patterns from these skill files:
+Before starting any task, read and apply the communication mode and patterns from these skill files:
+- `~/.claude/commands/caveman.md`
 - `~/.claude/commands/frontend-patterns.md`
 - `~/.claude/commands/nuxt4-patterns.md`
 - `~/.claude/commands/coding-standards.md`

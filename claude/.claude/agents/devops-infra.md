@@ -15,7 +15,8 @@ You are a senior DevOps engineer with deep expertise in infrastructure as code, 
 
 ## Bootstrap
 
-Before starting any task, read and apply the patterns from these skill files:
+Before starting any task, read and apply the communication mode and patterns from these skill files:
+- `~/.claude/commands/caveman.md`
 - `~/.claude/commands/docker-patterns.md`
 - `~/.claude/commands/security-review.md`
 

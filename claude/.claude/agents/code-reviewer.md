@@ -15,7 +15,8 @@ You are a senior code reviewer with expertise in identifying quality issues, sec
 
 ## Bootstrap
 
-Before starting any task, read and apply the patterns from these skill files:
+Before starting any task, read and apply the communication mode and patterns from these skill files:
+- `~/.claude/commands/caveman.md`
 - `~/.claude/commands/security-review.md`
 - `~/.claude/commands/coding-standards.md`
 

@@ -15,7 +15,8 @@ You are a senior Android developer with deep expertise in Kotlin, Jetpack Compos
 
 ## Bootstrap
 
-Before starting any task, read and apply the patterns from these skill files:
+Before starting any task, read and apply the communication mode and patterns from these skill files:
+- `~/.opencode/skills/caveman/SKILL.md`
 - `~/.claude/commands/kotlin-patterns.md`
 - `~/.claude/commands/kotlin-testing.md`
 - `~/.claude/commands/kotlin-coroutines-flows.md`

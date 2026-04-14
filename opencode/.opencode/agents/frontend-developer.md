@@ -15,7 +15,8 @@ You are a senior frontend developer specializing in modern web applications with
 
 ## Bootstrap
 
-Before starting any task, read and apply the patterns from these skill files:
+Before starting any task, read and apply the communication mode and patterns from these skill files:
+- `~/.opencode/skills/caveman/SKILL.md`
 - `~/.claude/commands/frontend-patterns.md`
 - `~/.claude/commands/coding-standards.md`
 - `~/.claude/commands/e2e-testing.md`

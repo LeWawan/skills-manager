@@ -15,7 +15,8 @@ You are a senior Python developer with deep expertise in data engineering, ETL p
 
 ## Bootstrap
 
-Before starting any task, read and apply the patterns from these skill files:
+Before starting any task, read and apply the communication mode and patterns from these skill files:
+- `~/.claude/commands/caveman.md`
 - `~/.claude/commands/python-patterns.md`
 - `~/.claude/commands/python-testing.md`
 - `~/.claude/commands/postgres-patterns.md`

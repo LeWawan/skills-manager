@@ -29,17 +29,19 @@ Installed automatically if missing (requires [Homebrew](https://brew.sh)):
 
 Specialized sub-agents invoked automatically by Claude Code and OpenCode. Each agent bootstraps by loading relevant slash commands as context.
 
+`caveman` is included as a bilingual English/French communication skill in the same file for both CLIs.
+
 | Agent | Stack | Auto-loads |
 |-------|-------|------------|
-| `ruby-rails` | Ruby, Rails 7+, ActiveRecord | backend-patterns, database-migrations, postgres-patterns, api-design, security-review |
-| `swift-ios` | Swift 6+, SwiftUI, concurrency | swift-concurrency-6-2, swiftui-patterns, swift-actor-persistence, swift-protocol-di-testing |
-| `kotlin-android` | Kotlin, Jetpack Compose, coroutines | kotlin-patterns, kotlin-testing, kotlin-coroutines-flows |
-| `python-data` | Python, Airflow, dbt | python-patterns, python-testing, postgres-patterns, database-migrations |
-| `devops-infra` | OpenTofu, Docker, GitLab CI | docker-patterns, security-review |
-| `code-reviewer` | Multi-language | security-review, coding-standards |
-| `frontend-developer` | React, Vue, TypeScript | frontend-patterns, coding-standards, e2e-testing |
-| `typescript-pro` | TypeScript full-stack | coding-standards, backend-patterns, api-design |
-| `vue-expert` | Vue 3, Nuxt 3 | frontend-patterns, nuxt4-patterns, coding-standards, e2e-testing |
+| `ruby-rails` | Ruby, Rails 7+, ActiveRecord | caveman, backend-patterns, database-migrations, postgres-patterns, api-design, security-review |
+| `swift-ios` | Swift 6+, SwiftUI, concurrency | caveman, swift-concurrency-6-2, swiftui-patterns, swift-actor-persistence, swift-protocol-di-testing |
+| `kotlin-android` | Kotlin, Jetpack Compose, coroutines | caveman, kotlin-patterns, kotlin-testing, kotlin-coroutines-flows |
+| `python-data` | Python, Airflow, dbt | caveman, python-patterns, python-testing, postgres-patterns, database-migrations |
+| `devops-infra` | OpenTofu, Docker, GitLab CI | caveman, docker-patterns, security-review |
+| `code-reviewer` | Multi-language | caveman, security-review, coding-standards |
+| `frontend-developer` | React, Vue, TypeScript | caveman, frontend-patterns, coding-standards, e2e-testing |
+| `typescript-pro` | TypeScript full-stack | caveman, coding-standards, backend-patterns, api-design |
+| `vue-expert` | Vue 3, Nuxt 3 | caveman, frontend-patterns, nuxt4-patterns, coding-standards, e2e-testing |
 
 ## Slash Commands
 
@@ -78,6 +80,7 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 | `/frontend-patterns` | React, Next.js, state management, performance |
 | `/nuxt4-patterns` | Nuxt 4 hydration safety, SSR-safe data fetching |
 | `/coding-standards` | Universal standards for TypeScript, React, Node.js |
+| `/caveman` | Ultra-compressed response mode for brief, high-signal communication, with English and French instructions in the same file |
 
 ### Backend / API
 
@@ -111,12 +114,12 @@ claude-skills/
   claude/                          # Claude Code stow package
     .claude/
       agents/                      # 9 agents → ~/.claude/agents/
-      commands/                    # 22 commands → ~/.claude/commands/
+      commands/                    # 23 commands → ~/.claude/commands/
   opencode/                        # OpenCode stow package
     .opencode/
       agents/                      # 9 agents → ~/.opencode/agents/
-      commands/                    # 22 commands → ~/.opencode/commands/
-      skills/                      # 22 skills → ~/.opencode/skills/
+      commands/                    # 23 commands → ~/.opencode/commands/
+      skills/                      # 23 skills → ~/.opencode/skills/
         api-design/SKILL.md
         kotlin-patterns/SKILL.md
         security-review/SKILL.md
@@ -241,6 +244,8 @@ When you add or modify commands in `claude/.claude/commands/`, you can regenerat
 ```
 
 This script automatically converts Claude commands into OpenCode SKILL.md format.
+
+Note: `caveman` is maintained as a bilingual EN/FR skill in the same file for both command and SKILL variants.
 
 ## Credits
 

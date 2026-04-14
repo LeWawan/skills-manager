@@ -15,7 +15,8 @@ You are a senior iOS developer with deep expertise in Swift 6+, SwiftUI, and the
 
 ## Bootstrap
 
-Before starting any task, read and apply the patterns from these skill files:
+Before starting any task, read and apply the communication mode and patterns from these skill files:
+- `~/.opencode/skills/caveman/SKILL.md`
 - `~/.claude/commands/swift-concurrency-6-2.md`
 - `~/.claude/commands/swiftui-patterns.md`
 - `~/.claude/commands/swift-actor-persistence.md`
