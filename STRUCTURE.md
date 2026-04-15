@@ -7,7 +7,8 @@ claude-skills/
 ├── MIGRATION.md                 # Migration guide
 ├── STRUCTURE.md                 # This file
 ├── .gitignore                   # Git ignore rules
-├── run                          # Installation script
+├── run                          # Installation script (direct symlinks)
+├── test_run.sh                  # Unit tests (30 tests)
 ├── convert-to-skills.sh         # Command → Skill converter
 │
 ├── claude/                      # Claude Code package
@@ -106,24 +107,24 @@ claude-skills/
         │   │   └── SKILL.md
         │   └── verification-loop/
         │       └── SKILL.md
-        ├── package.json         # Optional OpenCode plugin dependencies
-        ├── package-lock.json    # Lockfile for plugin deps
-        └── .gitignore           # Ignore local OpenCode package artifacts
+        └── (node_modules/, package.json — runtime artifacts, git-ignored)
 ```
 
 ## Installation Creates
 
+Each item is symlinked individually (file-level for agents/commands, directory-level for skills).
+
 ### For Claude Code
 ```
-~/.claude/agents/   → symlink to claude-skills/claude/.claude/agents/
-~/.claude/commands/ → symlink to claude-skills/claude/.claude/commands/
+~/.claude/agents/agent-name.md   → claude-skills/claude/.claude/agents/agent-name.md
+~/.claude/commands/cmd-name.md   → claude-skills/claude/.claude/commands/cmd-name.md
 ```
 
 ### For OpenCode
 ```
-~/.opencode/agents/   → symlink to claude-skills/opencode/.opencode/agents/
-~/.opencode/commands/ → symlink to claude-skills/opencode/.opencode/commands/
-~/.opencode/skills/   → symlink to claude-skills/opencode/.opencode/skills/
+~/.opencode/agents/agent-name.md   → claude-skills/opencode/.opencode/agents/agent-name.md
+~/.opencode/commands/cmd-name.md   → claude-skills/opencode/.opencode/commands/cmd-name.md
+~/.opencode/skills/skill-name/     → claude-skills/opencode/.opencode/skills/skill-name/
 ```
 
 ## File Counts

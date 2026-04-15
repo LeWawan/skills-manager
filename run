@@ -2,207 +2,230 @@
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-STOW_TARGET="$HOME"
-SELECTED_CLI=""
-PACKAGES=()
-BACKUP_DIR=""
+TARGET="$HOME"
+CLI=""
 
-# Colors
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 info()  { echo -e "${GREEN}[info]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[warn]${NC} $1"; }
-error() { echo -e "${RED}[error]${NC} $1"; }
+error() { echo -e "${RED}[error]${NC} $1"; exit 1; }
 
-check_deps() {
-  local missing=()
-
-  if ! command -v gum &>/dev/null; then
-    missing+=("gum")
-  fi
-
-  if ! command -v stow &>/dev/null; then
-    missing+=("stow")
-  fi
-
-  if [[ ${#missing[@]} -eq 0 ]]; then
-    info "All dependencies are installed."
-    return 0
-  fi
-
-  warn "Missing dependencies: ${missing[*]}"
-
-  if ! command -v brew &>/dev/null; then
-    error "Homebrew is required to install dependencies: https://brew.sh"
-    exit 1
-  fi
-
-  echo ""
-  read -rp "Install missing dependencies with brew? [y/N] " answer
-  if [[ "$answer" =~ ^[Yy]$ ]]; then
-    for dep in "${missing[@]}"; do
-      info "Installing $dep..."
-      brew install "$dep"
-    done
+check_gum() {
+  command -v gum &>/dev/null && return
+  if command -v brew &>/dev/null; then
+    read -rp "gum not found. Install with brew? [y/N] " ans
+    [[ "$ans" =~ ^[Yy]$ ]] && brew install gum || error "gum required"
   else
-    error "Cannot continue without: ${missing[*]}"
-    exit 1
+    error "gum required — install from https://github.com/charmbracelet/gum"
   fi
 }
 
-# List dirs managed by stow (from repo content, excluding runtime artifacts)
-managed_dirs() {
-  local config_dir="$REPO_DIR/$SELECTED_CLI/.$SELECTED_CLI"
-  find "$config_dir" -maxdepth 1 -mindepth 1 -type d \
-    -not -name node_modules \
-    -exec basename {} \;
-}
-
-get_config_dir() {
-  echo "$STOW_TARGET/.$SELECTED_CLI"
-}
-
-backup_existing() {
-  local config_dir=$(get_config_dir)
-  local has_real_dirs=false
-
-  while read -r dir; do
-    [[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && has_real_dirs=true && break
-  done < <(managed_dirs)
-
-  if [[ "$has_real_dirs" == false ]]; then
-    return 0
-  fi
-
-  if [[ -d "$BACKUP_DIR" ]]; then
-    error "A backup already exists at $BACKUP_DIR"
-    error "Please remove or rename it before installing: rm -rf $BACKUP_DIR"
-    exit 1
-  fi
-
-  warn "Existing config found in ~/.$SELECTED_CLI/"
-
-  if gum confirm "Back up managed dirs to ~/.$SELECTED_CLI.bak ?"; then
-    mkdir -p "$BACKUP_DIR"
-    while read -r dir; do
-      [[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && cp -r "$config_dir/$dir" "$BACKUP_DIR/$dir"
-    done < <(managed_dirs)
-    info "Backup saved to $BACKUP_DIR"
-  else
-    warn "Proceeding without backup."
-  fi
-
-  # Remove real dirs so stow can do clean tree folding
-  while read -r dir; do
-    [[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && rm -rf "$config_dir/$dir"
-  done < <(managed_dirs)
-}
-
-# Copy back user files/dirs from backup that don't exist in stowed dirs (recursive)
-restore_user_files() {
-  [[ ! -d "$BACKUP_DIR" ]] && return 0
-
-  local config_dir=$(get_config_dir)
-  local count=0
-
-  while IFS= read -r -d '' src; do
-    local rel="${src#"$BACKUP_DIR"/}"
-    local dest="$config_dir/$rel"
-    if [[ -d "$src" ]]; then
-      [[ ! -d "$dest" ]] && mkdir -p "$dest"
-    elif [[ -f "$src" ]] && [[ ! -e "$dest" ]]; then
-      mkdir -p "$(dirname "$dest")"
-      cp "$src" "$dest"
-      count=$((count + 1))
+# List all installable items as "category/name" lines
+list_all() {
+  local src="$REPO_DIR/$CLI/.$CLI"
+  for dir in "$src"/*/; do
+    local category=$(basename "$dir")
+    [[ "$category" == "node_modules" ]] && continue
+    if [[ "$category" == "skills" ]]; then
+      for skill in "$dir"/*/; do
+        [[ -d "$skill" ]] && echo "skills/$(basename "$skill")"
+      done
+    else
+      for f in "$dir"/*.md; do
+        [[ -f "$f" ]] && echo "$category/$(basename "$f" .md)"
+      done
     fi
-  done < <(find "$BACKUP_DIR" -mindepth 2 -print0)
+  done | sort
+}
 
-  if [[ $count -gt 0 ]]; then
-    info "Restored $count user file(s) from backup"
+# Extract short description from frontmatter (first sentence, max 60 chars)
+desc_of() {
+  local item="$1" file
+  if [[ "$item" == skills/* ]]; then
+    file="$REPO_DIR/$CLI/.$CLI/$item/SKILL.md"
+  else
+    file="$REPO_DIR/$CLI/.$CLI/$item.md"
   fi
+  [[ -f "$file" ]] || return
+  awk '/^---$/{n++; next} n==1 && /^description:/{
+    sub(/^description: */, "")
+    sub(/\. .*/, "")
+    if (length > 120) { $0 = substr($0, 1, 117) "..." }
+    print; exit
+  }' "$file"
+}
+
+# List items with descriptions for display: "category/name — desc"
+list_display() {
+  local items="$1"
+  while read -r item; do
+    local desc
+    desc=$(desc_of "$item")
+    if [[ -n "$desc" ]]; then
+      echo "$item — $desc"
+    else
+      echo "$item"
+    fi
+  done <<< "$items"
+}
+
+# Strip description from display line: "category/name — desc" → "category/name"
+strip_desc() {
+  sed 's/ — .*//'
+}
+
+# Source path for an item
+src_of() {
+  local item="$1"
+  if [[ "$item" == skills/* ]]; then
+    echo "$REPO_DIR/$CLI/.$CLI/$item"
+  else
+    echo "$REPO_DIR/$CLI/.$CLI/$item.md"
+  fi
+}
+
+# Target path for an item
+dest_of() {
+  local item="$1"
+  if [[ "$item" == skills/* ]]; then
+    echo "$TARGET/.$CLI/$item"
+  else
+    echo "$TARGET/.$CLI/$item.md"
+  fi
+}
+
+# Is this symlink ours?
+is_ours() {
+  [[ -L "$1" ]] && [[ "$(readlink "$1")" == "$REPO_DIR"/* ]]
 }
 
 do_install() {
-  backup_existing
+  local items selected count=0
+  items=$(list_all)
+  [[ -z "$items" ]] && error "No items found for $CLI"
 
-  # Ensure config dir exists so stow doesn't tree-fold the top level.
-  # Without this, stow creates a single symlink (~/.opencode -> repo/...)
-  # which bypasses .stow-local-ignore and exposes runtime artifacts.
-  mkdir -p "$(get_config_dir)"
+  local display
+  display=$(list_display "$items")
 
-  info "Installing $SELECTED_CLI skills..."
-  for pkg in "${PACKAGES[@]}"; do
-    info "Stowing $pkg..."
-    stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
-    stow -t "$STOW_TARGET" -d "$REPO_DIR" "$pkg"
-  done
+  # Pre-select already installed items
+  local preselected=()
+  while read -r item; do
+    is_ours "$(dest_of "$item")" && preselected+=("$item")
+  done <<< "$items"
 
-  restore_user_files
+  # Build pre-selected display lines
+  local preselected_display=()
+  if [[ ${#preselected[@]} -gt 0 ]]; then
+    for p in "${preselected[@]}"; do
+      local line
+      line=$(echo "$display" | grep "^${p}\b")
+      [[ -n "$line" ]] && preselected_display+=("$line")
+    done
+  fi
 
-  info "Done! Skills installed to ~/.$SELECTED_CLI/"
+  if [[ ${#preselected_display[@]} -gt 0 ]]; then
+    selected=$(echo "$display" | gum filter --no-limit \
+      --header "Select items to install:" \
+      --selected "$(IFS=,; echo "${preselected_display[*]}")") || true
+  else
+    selected=$(echo "$display" | gum filter --no-limit \
+      --header "Select items to install:") || true
+  fi
+
+  [[ -z "$selected" ]] && warn "Nothing selected." && return
+
+  while read -r line; do
+    local item
+    item=$(echo "$line" | strip_desc)
+    local src=$(src_of "$item") dest=$(dest_of "$item")
+    is_ours "$dest" && continue
+    if [[ -e "$dest" || -L "$dest" ]]; then
+      warn "Skip $item — already exists (not ours)"
+      continue
+    fi
+    mkdir -p "$(dirname "$dest")"
+    ln -s "$src" "$dest"
+    count=$((count + 1))
+  done <<< "$selected"
+
+  info "Linked $count new item(s) to ~/.$CLI/"
 }
 
 do_uninstall() {
-  info "Uninstalling $SELECTED_CLI skills..."
-  for pkg in "${PACKAGES[@]}"; do
-    info "Unstowing $pkg..."
-    stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
-  done
+  local items installed=() count=0
+  items=$(list_all)
 
-  if [[ -d "$BACKUP_DIR" ]]; then
-    info "Restoring backup from $BACKUP_DIR..."
-    local config_dir=$(get_config_dir)
-    # After unstow, config_dir may be a broken symlink — remove it first
-    [[ -L "$config_dir" ]] && rm "$config_dir"
-    mkdir -p "$config_dir"
-    cp -r "$BACKUP_DIR"/* "$config_dir/"
-    rm -rf "$BACKUP_DIR"
-    info "Backup restored and removed."
-  fi
+  while read -r item; do
+    is_ours "$(dest_of "$item")" && installed+=("$item")
+  done <<< "$items"
 
-  info "Done! Skills removed."
+  [[ ${#installed[@]} -eq 0 ]] && warn "Nothing installed." && return
+
+  local installed_list
+  installed_list=$(printf '%s\n' "${installed[@]}")
+  local display
+  display=$(list_display "$installed_list")
+
+  local selected
+  selected=$(echo "$display" | gum filter --no-limit \
+    --header "Select items to uninstall:" \
+    --selected "$(echo "$display" | tr '\n' ',')") || true
+
+  [[ -z "$selected" ]] && warn "Nothing selected." && return
+
+  while read -r line; do
+    local item
+    item=$(echo "$line" | strip_desc)
+    local dest=$(dest_of "$item")
+    is_ours "$dest" && rm "$dest" && count=$((count + 1))
+  done <<< "$selected"
+
+  info "Removed $count item(s) from ~/.$CLI/"
+}
+
+do_install_all() {
+  local items count=0 skipped=0
+  items=$(list_all)
+  [[ -z "$items" ]] && error "No items found for $CLI"
+
+  while read -r item; do
+    local src=$(src_of "$item") dest=$(dest_of "$item")
+    is_ours "$dest" && continue
+    if [[ -e "$dest" || -L "$dest" ]]; then
+      warn "Skip $item — already exists (not ours)"
+      skipped=$((skipped + 1))
+      continue
+    fi
+    mkdir -p "$(dirname "$dest")"
+    ln -s "$src" "$dest"
+    count=$((count + 1))
+  done <<< "$items"
+
+  info "Linked $count new item(s) to ~/.$CLI/"
+  [[ $skipped -gt 0 ]] && warn "Skipped $skipped item(s) — already exist (not ours)"
+  return 0
 }
 
 main() {
-  echo "=== Skills Manager for Claude Code & OpenCode ==="
+  echo "=== Skills Manager ==="
   echo ""
+  check_gum
 
-  check_deps
+  CLI=$(gum choose --header "Select CLI:" "claude" "opencode") || true
+  [[ -z "$CLI" ]] && exit 0
 
-  # Select CLI
-  SELECTED_CLI=$(gum choose \
-    --header "Select your CLI:" \
-    "claude" \
-    "opencode") || true
-
-  [[ -z "$SELECTED_CLI" ]] && echo "No CLI selected." && exit 0
-
-  # Set package and backup directory based on selection
-  PACKAGES=("$SELECTED_CLI")
-  BACKUP_DIR="$STOW_TARGET/.$SELECTED_CLI.bak"
-
-  info "Selected: $SELECTED_CLI"
-  echo ""
-
-  # Select action
   local action
-  action=$(gum choose \
-    --header "Select an action:" \
-    "Install skills" \
-    "Uninstall skills") || true
-
-  [[ -z "$action" ]] && echo "No action selected." && exit 0
+  action=$(gum choose --header "Action:" "Install" "Install all" "Uninstall") || true
+  [[ -z "$action" ]] && exit 0
 
   case "$action" in
-    "Install skills")
-      do_install
-      ;;
-    "Uninstall skills")
-      do_uninstall
-      ;;
+    Install)      do_install ;;
+    "Install all") do_install_all ;;
+    Uninstall)    do_uninstall ;;
   esac
 }
 

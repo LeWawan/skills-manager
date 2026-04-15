@@ -1,6 +1,6 @@
 # claude-skills
 
-Curated collection of custom agents and slash commands for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [OpenCode](https://opencode.ai). Managed with [GNU Stow](https://www.gnu.org/software/stow/) for clean symlink-based installation.
+Curated collection of custom agents and slash commands for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [OpenCode](https://opencode.ai). Uses direct symlinks for clean, granular installation.
 
 ## Quick Start
 
@@ -13,16 +13,15 @@ git clone <repo-url> && cd claude-skills
 
 The interactive menu will guide you through:
 1. Selecting your CLI (Claude Code or OpenCode)
-2. Choosing to install or uninstall skills
-3. Dependency installation if needed
+2. Choosing an action: **Install** (selective), **Install all**, or **Uninstall**
+3. Picking individual items to install or remove (in selective mode)
 
-If you already have files in managed directories (`agents/`, `commands/`), the script will offer to back them up to `~/.claude.bak/` or `~/.opencode.bak/` before installing. User files that don't conflict with repo skills are automatically restored after stow. On uninstall, the backup is fully restored.
+Each agent, command, and skill is symlinked individually — your existing files are never touched. Only symlinks owned by this repo are managed.
 
 ### Dependencies
 
 Installed automatically if missing (requires [Homebrew](https://brew.sh)):
 
-- **[stow](https://www.gnu.org/software/stow/)** — symlink farm manager
 - **[gum](https://github.com/charmbracelet/gum)** — interactive terminal UI
 
 ## Agents
@@ -119,11 +118,11 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 
 ```
 claude-skills/
-  claude/                          # Claude Code stow package
+  claude/                          # Claude Code package
     .claude/
       agents/                      # 9 agents → ~/.claude/agents/
       commands/                    # 26 commands → ~/.claude/commands/
-  opencode/                        # OpenCode stow package
+  opencode/                        # OpenCode package
     .opencode/
       agents/                      # 9 agents → ~/.opencode/agents/
       commands/                    # 26 commands → ~/.opencode/commands/
@@ -133,33 +132,34 @@ claude-skills/
         security-review/SKILL.md
         ...
   run                              # installer script
+  test_run.sh                      # unit tests (30 tests)
   convert-to-skills.sh             # skills converter
 ```
 
-Running `./run` > Select your CLI > **Install skills**:
+Running `./run`:
 
 1. Choose between **claude** or **opencode**
-2. Backs up existing managed dirs to `~/.claude.bak/` or `~/.opencode.bak/` (if any real files are present)
-3. Removes real dirs so stow can create clean **directory symlinks** (tree folding)
-4. Stows the package — each dir becomes a single symlink to the repo
-5. Restores user files from backup that don't conflict with repo skills
+2. Pick an action: **Install** (selective), **Install all**, or **Uninstall**
+3. For selective install/uninstall, pick individual items from a filterable list
+4. Each item is symlinked individually (file → file, skill dir → dir)
+5. Existing user files are never overwritten — only our own symlinks are managed
 
 ### For Claude Code:
 ```
-~/.claude/agents   →  claude-skills/claude/.claude/agents/
-~/.claude/commands →  claude-skills/claude/.claude/commands/
+~/.claude/agents/agent-name.md   →  claude-skills/claude/.claude/agents/agent-name.md
+~/.claude/commands/cmd-name.md   →  claude-skills/claude/.claude/commands/cmd-name.md
 ```
 
 ### For OpenCode:
 ```
-~/.opencode/agents   →  claude-skills/opencode/.opencode/agents/
-~/.opencode/commands →  claude-skills/opencode/.opencode/commands/
-~/.opencode/skills   →  claude-skills/opencode/.opencode/skills/
+~/.opencode/agents/agent-name.md   →  claude-skills/opencode/.opencode/agents/agent-name.md
+~/.opencode/commands/cmd-name.md   →  claude-skills/opencode/.opencode/commands/cmd-name.md
+~/.opencode/skills/skill-name/     →  claude-skills/opencode/.opencode/skills/skill-name/
 ```
 
-Because stow uses directory symlinks, any new skill added to the repo is **instantly available** — no re-install needed.
+New items added to the repo require re-running `./run` to install them.
 
-To remove all symlinks and restore your original files: `./run` > **Uninstall skills**.
+To remove symlinks: `./run` > **Uninstall** > select items to remove.
 
 ## Adding Your Own
 
@@ -222,7 +222,7 @@ compatibility: opencode
 Your skill instructions here.
 ```
 
-Then re-run `./run` > **Install skills** (or just `git pull` if already installed — tree folding means new files appear automatically).
+Then re-run `./run` > **Install** or **Install all** to pick up new items.
 
 ## CLI Differences
 

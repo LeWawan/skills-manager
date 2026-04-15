@@ -1,40 +1,63 @@
 # Migration Guide
 
+## From v2.1 (stow-based) to v3.0 (direct symlinks)
+
+The installer no longer uses GNU Stow. It creates individual symlinks per file/skill instead of directory-level symlinks.
+
+### What changed
+
+- **No more stow dependency** — only `gum` is required
+- **No backup/restore** — user files are never overwritten; only our own symlinks are managed
+- **Granular selection** — pick individual agents, commands, and skills to install
+- **"Install all" option** — install everything at once without selection
+
+### Upgrading
+
+1. **Uninstall the old way first** (if currently installed via stow):
+   ```bash
+   git stash   # if you have local changes
+   git checkout main
+   ./run       # Select CLI > Uninstall skills
+   ```
+
+2. **Switch to the new branch and install**:
+   ```bash
+   git checkout feat/drop-stow-direct-symlinks  # or main once merged
+   ./run       # Select CLI > Install all (or Install for selective)
+   ```
+
+3. **Verify**: check that your items are symlinked:
+   ```bash
+   ls -la ~/.claude/agents/      # should show symlinks → repo
+   ls -la ~/.opencode/skills/    # should show symlinks → repo
+   ```
+
 ## For Existing Claude Code Users
 
 If you're already using this repo with Claude Code and want to try OpenCode:
 
 ### Option 1: Keep Both CLIs
 
-You can install skills for both CLIs simultaneously:
+You can install for both CLIs simultaneously:
 
 ```bash
-# Install for Claude Code
-./run
-# Select: claude > Install skills
-
-# Install for OpenCode  
-./run
-# Select: opencode > Install skills
+./run   # Select: claude > Install all
+./run   # Select: opencode > Install all
 ```
 
-Both will coexist peacefully in separate directories.
+Both coexist peacefully in separate directories.
 
 ### Option 2: Migrate to OpenCode Only
 
-1. **Uninstall Claude skills** (optional - backs up your custom files):
+1. **Uninstall Claude items**:
    ```bash
-   ./run
-   # Select: claude > Uninstall skills
+   ./run   # Select: claude > Uninstall > select all
    ```
 
-2. **Install OpenCode skills**:
+2. **Install OpenCode items**:
    ```bash
-   ./run
-   # Select: opencode > Install skills
+   ./run   # Select: opencode > Install all
    ```
-
-3. Your custom agents and commands from `~/.claude/` will be backed up to `~/.claude.bak/`
 
 ## New to Both?
 
@@ -43,14 +66,14 @@ Just run:
 ./run
 ```
 
-And select your preferred CLI. The script will guide you through the installation.
+Select your preferred CLI. The script will guide you through installation.
 
 ## What's Different in OpenCode?
 
 ### Agents
 Same structure, just in `.opencode/agents/` instead of `.claude/agents/`
 
-### Commands  
+### Commands
 Same structure, just in `.opencode/commands/` instead of `.claude/commands/`
 
 ### Skills (New in OpenCode!)
@@ -70,16 +93,14 @@ Use the api-design skill to review my endpoints
 
 ## Troubleshooting
 
-### "A backup already exists"
-If you see this error, you have an existing backup. Either:
-- Remove it: `rm -rf ~/.claude.bak` or `rm -rf ~/.opencode.bak`
-- Or restore it manually before installing
-
 ### Symlinks not working
-Make sure you're in the repo directory when running `./run`
+Make sure you're running `./run` from the repo directory.
+
+### Item skipped during install
+If you see "Skip — already exists (not ours)", there's already a file at that path that isn't one of our symlinks. Remove or rename it manually, then re-run.
 
 ### Skills not showing in OpenCode
-- Verify the files exist: `ls ~/.opencode/skills/`
+- Verify the symlinks exist: `ls -la ~/.opencode/skills/`
 - Check SKILL.md has proper YAML frontmatter
 - Restart OpenCode
 

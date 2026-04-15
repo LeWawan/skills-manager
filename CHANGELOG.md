@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.0.0] - 2026-04-15
+
+### Breaking Changes
+- **Dropped GNU Stow**: Replaced stow-based directory symlinks with direct per-file/per-skill symlinks. Stow is no longer a dependency.
+- **No backup/restore system**: User files are never overwritten — only symlinks owned by this repo are managed. The old backup/restore flow is removed.
+
+### Added
+- **"Install all" action**: New menu option to install every item at once without going through the selection filter
+- **Granular selection**: Pick individual agents, commands, and skills to install or uninstall via `gum filter --no-limit`
+- **Pre-selection**: Already-installed items are pre-selected when opening the install filter
+- **`is_ours` safety check**: Every operation verifies the symlink points to this repo before touching it
+
+### Changed
+- **`run` script**: Rewritten from 209 to ~165 lines — simpler, no backup logic, no stow edge cases
+- **`test_run.sh`**: Rewritten with 30 tests covering `list_all`, `src_of`/`dest_of`, `link_item`, `unlink_item`, `is_ours`, `do_install_all`, full cycles, idempotence, selective install/uninstall, user file preservation, and runtime artifact safety
+
+### Removed
+- **`opencode/.stow-local-ignore`**: No longer needed (stow removed)
+- **stow dependency**: Only `gum` is required
+
 ## [2.1.0] - 2026-04-14
 
 ### Fixed

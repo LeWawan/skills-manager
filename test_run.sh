@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
-# Unit tests for the ./run installer script.
-# Runs in an isolated temp dir — no side effects on the real system.
+# Unit tests for ./run — symlink-based installer.
+# Runs in isolated temp dir, no side effects.
 #
-# Usage:  ./test_run.sh
-# Exit 0 = all pass, exit 1 = at least one failure.
+# Usage:  bash test_run.sh
 
 set -o pipefail
-# NOTE: set -e removed — it interacts badly with [[ ]] && patterns in test assertions
 
-###############################################################################
-# Test harness
-###############################################################################
 PASS=0
 FAIL=0
 CURRENT_TEST=""
@@ -24,801 +19,724 @@ fail() {
 	echo "  ✗ $CURRENT_TEST — $1"
 }
 
-assert_file_exists() {
-	[[ -f "$1" ]] && return 0
-	fail "expected file $1"
-	return 1
-}
-assert_file_missing() {
-	[[ ! -e "$1" ]] && return 0
-	fail "expected $1 absent"
-	return 1
-}
-assert_dir_exists() {
-	[[ -d "$1" ]] && return 0
-	fail "expected dir $1"
-	return 1
-}
-assert_dir_missing() {
-	[[ ! -e "$1" ]] && return 0
-	fail "expected $1 absent"
-	return 1
-}
-assert_link() {
-	[[ -L "$1" ]] && return 0
+assert_link() { [[ -L "$1" ]] || {
 	fail "expected symlink $1"
 	return 1
-}
-assert_eq() {
-	if [[ "$1" == "$2" ]]; then return 0; fi
+}; }
+assert_link_target() { [[ "$(readlink "$1")" == "$2" ]] || {
+	fail "symlink $1 -> $(readlink "$1"), expected $2"
+	return 1
+}; }
+assert_file_exists() { [[ -e "$1" ]] || {
+	fail "expected $1 to exist"
+	return 1
+}; }
+assert_not_exists() { [[ ! -e "$1" && ! -L "$1" ]] || {
+	fail "expected $1 absent"
+	return 1
+}; }
+assert_not_link() { [[ ! -L "$1" ]] || {
+	fail "expected $1 not a symlink"
+	return 1
+}; }
+assert_eq() { [[ "$1" == "$2" ]] || {
 	fail "expected '$2', got '$1'"
 	return 1
-}
-assert_contains() {
-	if [[ "$1" == *"$2"* ]]; then return 0; fi
-	fail "expected output to contain '$2'"
+}; }
+assert_contains() { [[ "$1" == *"$2"* ]] || {
+	fail "expected to contain '$2'"
 	return 1
-}
+}; }
 
-###############################################################################
-# Setup / teardown per test
-###############################################################################
-TMP_ROOT=""
+# ---------------------------------------------------------------------------
+# Setup / teardown
+# ---------------------------------------------------------------------------
+TMP=""
 
 setup() {
-	TMP_ROOT=$(mktemp -d)
+	TMP=$(mktemp -d)
+	REPO_DIR="$TMP/repo"
+	TARGET="$TMP/home"
+	mkdir -p "$TARGET"
 
-	# -- Fake REPO_DIR with a "claude" package ----------------------------------
-	REPO_DIR="$TMP_ROOT/repo"
+	# Claude package
 	mkdir -p "$REPO_DIR/claude/.claude/agents"
 	mkdir -p "$REPO_DIR/claude/.claude/commands"
-	echo "agent-a content" >"$REPO_DIR/claude/.claude/agents/agent-a.md"
-	echo "agent-b content" >"$REPO_DIR/claude/.claude/agents/agent-b.md"
-	echo "cmd-x content" >"$REPO_DIR/claude/.claude/commands/cmd-x.md"
-	echo "cmd-y content" >"$REPO_DIR/claude/.claude/commands/cmd-y.md"
+	echo "agent-a" >"$REPO_DIR/claude/.claude/agents/agent-a.md"
+	echo "agent-b" >"$REPO_DIR/claude/.claude/agents/agent-b.md"
+	echo "cmd-x" >"$REPO_DIR/claude/.claude/commands/cmd-x.md"
+	echo "cmd-y" >"$REPO_DIR/claude/.claude/commands/cmd-y.md"
 
-	# -- Fake REPO_DIR with an "opencode" package --------------------------------
+	# OpenCode package
 	mkdir -p "$REPO_DIR/opencode/.opencode/agents"
 	mkdir -p "$REPO_DIR/opencode/.opencode/commands"
 	mkdir -p "$REPO_DIR/opencode/.opencode/skills/api-design"
-	echo "oc-agent content" >"$REPO_DIR/opencode/.opencode/agents/oc-agent.md"
-	echo "oc-cmd content" >"$REPO_DIR/opencode/.opencode/commands/oc-cmd.md"
-	echo "skill content" >"$REPO_DIR/opencode/.opencode/skills/api-design/SKILL.md"
+	mkdir -p "$REPO_DIR/opencode/.opencode/skills/caveman"
+	echo "oc-agent" >"$REPO_DIR/opencode/.opencode/agents/oc-agent.md"
+	echo "oc-cmd" >"$REPO_DIR/opencode/.opencode/commands/oc-cmd.md"
+	echo "skill-ad" >"$REPO_DIR/opencode/.opencode/skills/api-design/SKILL.md"
+	echo "skill-cv" >"$REPO_DIR/opencode/.opencode/skills/caveman/SKILL.md"
 
-	# -- Fake HOME ---------------------------------------------------------------
-	STOW_TARGET="$TMP_ROOT/home"
-	mkdir -p "$STOW_TARGET"
-
-	# -- Source functions from run (override globals, skip main) -----------------
-	# We re-source a trimmed version that only defines functions.
+	# Source functions from run
 	_source_functions
 }
 
-teardown() {
-	[[ -n "$TMP_ROOT" && -d "$TMP_ROOT" ]] && rm -rf "$TMP_ROOT"
-}
+teardown() { [[ -n "$TMP" ]] && rm -rf "$TMP"; }
 
 _source_functions() {
-	# Minimal shim: define all functions from ./run with our overridden globals.
-	# We do NOT call main().
-
-	RED='\033[0;31m'
 	GREEN='\033[0;32m'
 	YELLOW='\033[0;33m'
+	RED='\033[0;31m'
 	NC='\033[0m'
 
 	info() { echo -e "${GREEN}[info]${NC} $1"; }
 	warn() { echo -e "${YELLOW}[warn]${NC} $1"; }
 	error() { echo -e "${RED}[error]${NC} $1"; }
 
-	managed_dirs() {
-		local config_dir="$REPO_DIR/$SELECTED_CLI/.$SELECTED_CLI"
-		find "$config_dir" -maxdepth 1 -mindepth 1 -type d \
-			-not -name node_modules \
-			-exec basename {} \;
+	list_all() {
+		local src="$REPO_DIR/$CLI/.$CLI"
+		for dir in "$src"/*/; do
+			local category=$(basename "$dir")
+			[[ "$category" == "node_modules" ]] && continue
+			if [[ "$category" == "skills" ]]; then
+				for skill in "$dir"/*/; do
+					[[ -d "$skill" ]] && echo "skills/$(basename "$skill")"
+				done
+			else
+				for f in "$dir"/*.md; do
+					[[ -f "$f" ]] && echo "$category/$(basename "$f" .md)"
+				done
+			fi
+		done | sort
 	}
 
-	get_config_dir() {
-		echo "$STOW_TARGET/.$SELECTED_CLI"
+	src_of() {
+		local item="$1"
+		if [[ "$item" == skills/* ]]; then
+			echo "$REPO_DIR/$CLI/.$CLI/$item"
+		else
+			echo "$REPO_DIR/$CLI/.$CLI/$item.md"
+		fi
 	}
 
-	backup_existing() {
-		local config_dir=$(get_config_dir)
-		local has_real_dirs=false
+	dest_of() {
+		local item="$1"
+		if [[ "$item" == skills/* ]]; then
+			echo "$TARGET/.$CLI/$item"
+		else
+			echo "$TARGET/.$CLI/$item.md"
+		fi
+	}
 
-		while read -r dir; do
-			[[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && has_real_dirs=true && break
-		done < <(managed_dirs)
+	is_ours() {
+		[[ -L "$1" ]] && [[ "$(readlink "$1")" == "$REPO_DIR"/* ]]
+	}
 
-		if [[ "$has_real_dirs" == false ]]; then
+	link_item() {
+		local item="$1"
+		local src=$(src_of "$item") dest=$(dest_of "$item")
+		is_ours "$dest" && return 0
+		if [[ -e "$dest" || -L "$dest" ]]; then
+			warn "Skip $item — already exists (not ours)"
 			return 0
 		fi
+		mkdir -p "$(dirname "$dest")"
+		ln -s "$src" "$dest"
+	}
 
-		if [[ -d "$BACKUP_DIR" ]]; then
-			error "A backup already exists at $BACKUP_DIR"
+	unlink_item() {
+		local item="$1"
+		local dest=$(dest_of "$item")
+		is_ours "$dest" && rm "$dest" && return 0
+		[[ -e "$dest" ]] && warn "Skip $item — not ours"
+	}
+
+	do_install_all() {
+		local items count=0 skipped=0
+		items=$(list_all)
+		[[ -z "$items" ]] && {
+			error "No items found for $CLI"
 			return 1
-		fi
+		}
 
-		# In tests we always accept backup (no gum prompt)
-		mkdir -p "$BACKUP_DIR"
-		while read -r dir; do
-			[[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && cp -r "$config_dir/$dir" "$BACKUP_DIR/$dir"
-		done < <(managed_dirs)
-
-		# Remove real dirs so stow can do clean tree folding
-		while read -r dir; do
-			[[ -d "$config_dir/$dir" && ! -L "$config_dir/$dir" ]] && rm -rf "$config_dir/$dir"
-		done < <(managed_dirs)
-	}
-
-	restore_user_files() {
-		[[ ! -d "$BACKUP_DIR" ]] && return 0
-
-		local config_dir=$(get_config_dir)
-		local count=0
-
-		while IFS= read -r -d '' src; do
-			local rel="${src#"$BACKUP_DIR"/}"
-			local dest="$config_dir/$rel"
-			if [[ -d "$src" ]]; then
-				[[ ! -d "$dest" ]] && mkdir -p "$dest"
-			elif [[ -f "$src" ]] && [[ ! -e "$dest" ]]; then
-				mkdir -p "$(dirname "$dest")"
-				cp "$src" "$dest"
-				count=$((count + 1))
+		while read -r item; do
+			local src=$(src_of "$item") dest=$(dest_of "$item")
+			is_ours "$dest" && continue
+			if [[ -e "$dest" || -L "$dest" ]]; then
+				warn "Skip $item — already exists (not ours)"
+				skipped=$((skipped + 1))
+				continue
 			fi
-		done < <(find "$BACKUP_DIR" -mindepth 2 -print0)
+			mkdir -p "$(dirname "$dest")"
+			ln -s "$src" "$dest"
+			count=$((count + 1))
+		done <<<"$items"
 
-		if [[ $count -gt 0 ]]; then
-			info "Restored $count user file(s) from backup"
-		fi
+		info "Linked $count new item(s) to ~/.$CLI/"
+		[[ $skipped -gt 0 ]] && warn "Skipped $skipped item(s) — already exist (not ours)"
+		return 0
 	}
 
-	do_install() {
-		backup_existing
-
-		# Ensure config dir exists so stow doesn't tree-fold the top level
-		mkdir -p "$(get_config_dir)"
-
-		for pkg in "${PACKAGES[@]}"; do
-			stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg" 2>/dev/null || true
-			stow -t "$STOW_TARGET" -d "$REPO_DIR" "$pkg"
-		done
-
-		restore_user_files
+	desc_of() {
+		local item="$1" file
+		if [[ "$item" == skills/* ]]; then
+			file="$REPO_DIR/$CLI/.$CLI/$item/SKILL.md"
+		else
+			file="$REPO_DIR/$CLI/.$CLI/$item.md"
+		fi
+		[[ -f "$file" ]] || return
+		awk '/^---$/{n++; next} n==1 && /^description:/{
+			sub(/^description: */, "")
+			sub(/\. .*/, "")
+			if (length > 120) { $0 = substr($0, 1, 117) "..." }
+			print; exit
+		}' "$file"
 	}
 
-	do_uninstall() {
-		for pkg in "${PACKAGES[@]}"; do
-			stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
-		done
+	list_display() {
+		local items="$1"
+		while read -r item; do
+			local desc
+			desc=$(desc_of "$item")
+			if [[ -n "$desc" ]]; then
+				echo "$item — $desc"
+			else
+				echo "$item"
+			fi
+		done <<<"$items"
+	}
 
-		if [[ -d "$BACKUP_DIR" ]]; then
-			local config_dir=$(get_config_dir)
-			[[ -L "$config_dir" ]] && rm "$config_dir"
-			mkdir -p "$config_dir"
-			cp -r "$BACKUP_DIR"/* "$config_dir/"
-			rm -rf "$BACKUP_DIR"
-		fi
+	strip_desc() {
+		sed 's/ — .*//'
 	}
 }
 
 ###############################################################################
-# Require stow
-###############################################################################
-if ! command -v stow &>/dev/null; then
-	echo "ERROR: stow is required to run these tests. Install with: brew install stow"
-	exit 1
-fi
-
-###############################################################################
-# Tests: managed_dirs
-###############################################################################
 echo ""
-echo "== managed_dirs =="
+echo "== list_all =="
 
-CURRENT_TEST="lists agent and command dirs for claude"
+CURRENT_TEST="lists claude agents and commands"
 setup
-SELECTED_CLI="claude"
-dirs=$(managed_dirs | sort)
-expected=$(printf "agents\ncommands")
-assert_eq "$dirs" "$expected" && pass
+CLI="claude"
+items=$(list_all)
+assert_contains "$items" "agents/agent-a" &&
+	assert_contains "$items" "agents/agent-b" &&
+	assert_contains "$items" "commands/cmd-x" &&
+	assert_contains "$items" "commands/cmd-y" &&
+	pass
 teardown
 
-CURRENT_TEST="lists agents, commands, skills for opencode"
+CURRENT_TEST="lists opencode agents, commands, and skills"
 setup
-SELECTED_CLI="opencode"
-dirs=$(managed_dirs | sort)
-expected=$(printf "agents\ncommands\nskills")
-assert_eq "$dirs" "$expected" && pass
+CLI="opencode"
+items=$(list_all)
+assert_contains "$items" "agents/oc-agent" &&
+	assert_contains "$items" "commands/oc-cmd" &&
+	assert_contains "$items" "skills/api-design" &&
+	assert_contains "$items" "skills/caveman" &&
+	pass
 teardown
 
-CURRENT_TEST="excludes node_modules from managed dirs"
+CURRENT_TEST="excludes node_modules"
 setup
-SELECTED_CLI="opencode"
+CLI="opencode"
 mkdir -p "$REPO_DIR/opencode/.opencode/node_modules/some-pkg"
-echo "pkg" >"$REPO_DIR/opencode/.opencode/node_modules/some-pkg/index.js"
-dirs=$(managed_dirs | sort)
-expected=$(printf "agents\ncommands\nskills")
-assert_eq "$dirs" "$expected" && pass
+echo "x" >"$REPO_DIR/opencode/.opencode/node_modules/some-pkg/index.js"
+items=$(list_all)
+assert_eq "$(echo "$items" | grep -c node_modules)" "0" && pass
 teardown
 
-###############################################################################
-# Tests: get_config_dir
 ###############################################################################
 echo ""
-echo "== get_config_dir =="
+echo "== src_of / dest_of =="
 
-CURRENT_TEST="returns correct path for claude"
+CURRENT_TEST="paths for agent"
 setup
-SELECTED_CLI="claude"
-result=$(get_config_dir)
-assert_eq "$result" "$STOW_TARGET/.claude" && pass
+CLI="claude"
+assert_eq "$(src_of agents/agent-a)" "$REPO_DIR/claude/.claude/agents/agent-a.md" &&
+	assert_eq "$(dest_of agents/agent-a)" "$TARGET/.claude/agents/agent-a.md" &&
+	pass
 teardown
 
-CURRENT_TEST="returns correct path for opencode"
+CURRENT_TEST="paths for skill (dir, no .md)"
 setup
-SELECTED_CLI="opencode"
-result=$(get_config_dir)
-assert_eq "$result" "$STOW_TARGET/.opencode" && pass
+CLI="opencode"
+assert_eq "$(src_of skills/api-design)" "$REPO_DIR/opencode/.opencode/skills/api-design" &&
+	assert_eq "$(dest_of skills/api-design)" "$TARGET/.opencode/skills/api-design" &&
+	pass
 teardown
 
-###############################################################################
-# Tests: backup_existing
 ###############################################################################
 echo ""
-echo "== backup_existing =="
+echo "== link_item =="
 
-CURRENT_TEST="no-op when config dir does not exist"
+CURRENT_TEST="creates symlink to repo"
 setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-backup_existing
-assert_dir_missing "$BACKUP_DIR" && pass
-teardown
-
-CURRENT_TEST="no-op when config dir has only symlinks"
-setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$STOW_TARGET/.claude"
-ln -s /tmp "$STOW_TARGET/.claude/agents"
-ln -s /tmp "$STOW_TARGET/.claude/commands"
-backup_existing
-assert_dir_missing "$BACKUP_DIR" && pass
-teardown
-
-CURRENT_TEST="backs up real dirs and removes them"
-setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$STOW_TARGET/.claude/agents"
-mkdir -p "$STOW_TARGET/.claude/commands"
-echo "user-agent" >"$STOW_TARGET/.claude/agents/my-agent.md"
-echo "user-cmd" >"$STOW_TARGET/.claude/commands/my-cmd.md"
-backup_existing
-assert_dir_exists "$BACKUP_DIR" &&
-	assert_file_exists "$BACKUP_DIR/agents/my-agent.md" &&
-	assert_file_exists "$BACKUP_DIR/commands/my-cmd.md" &&
-	assert_dir_missing "$STOW_TARGET/.claude/agents" &&
-	assert_dir_missing "$STOW_TARGET/.claude/commands" &&
+CLI="claude"
+link_item "agents/agent-a"
+dest=$(dest_of "agents/agent-a")
+assert_link "$dest" &&
+	assert_link_target "$dest" "$REPO_DIR/claude/.claude/agents/agent-a.md" &&
 	pass
 teardown
 
-CURRENT_TEST="fails if backup already exists"
+CURRENT_TEST="creates parent dirs"
 setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$STOW_TARGET/.claude/agents"
-echo "x" >"$STOW_TARGET/.claude/agents/x.md"
-mkdir -p "$BACKUP_DIR"
-output=$(backup_existing 2>&1 || true)
-assert_contains "$output" "backup already exists" && pass
+CLI="opencode"
+link_item "skills/api-design"
+dest=$(dest_of "skills/api-design")
+assert_link "$dest" && pass
 teardown
 
-CURRENT_TEST="backs up nested user subdirs"
+CURRENT_TEST="idempotent — second call is no-op"
 setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$STOW_TARGET/.claude/commands/sub/deep"
-echo "deep-file" >"$STOW_TARGET/.claude/commands/sub/deep/nested.md"
-backup_existing
-assert_file_exists "$BACKUP_DIR/commands/sub/deep/nested.md" && pass
+CLI="claude"
+link_item "agents/agent-a"
+link_item "agents/agent-a"
+dest=$(dest_of "agents/agent-a")
+assert_link "$dest" && pass
 teardown
 
-###############################################################################
-# Tests: restore_user_files
+CURRENT_TEST="skips if non-symlink file exists"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "user-file" >"$TARGET/.claude/agents/agent-a.md"
+output=$(link_item "agents/agent-a" 2>&1)
+assert_not_link "$TARGET/.claude/agents/agent-a.md" &&
+	content=$(cat "$TARGET/.claude/agents/agent-a.md") &&
+	assert_eq "$content" "user-file" &&
+	pass
+teardown
+
+CURRENT_TEST="skips if foreign symlink exists"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+ln -s "/some/other/path" "$TARGET/.claude/agents/agent-a.md"
+output=$(link_item "agents/agent-a" 2>&1)
+assert_link_target "$TARGET/.claude/agents/agent-a.md" "/some/other/path" && pass
+teardown
+
 ###############################################################################
 echo ""
-echo "== restore_user_files =="
+echo "== unlink_item =="
 
-CURRENT_TEST="no-op when no backup dir"
+CURRENT_TEST="removes our symlink"
 setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$STOW_TARGET/.claude/agents"
-restore_user_files
-pass
+CLI="claude"
+link_item "agents/agent-a"
+unlink_item "agents/agent-a"
+assert_not_exists "$(dest_of agents/agent-a)" && pass
 teardown
 
-CURRENT_TEST="restores top-level user files that do not conflict"
+CURRENT_TEST="leaves non-symlink files alone"
 setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-# Simulate backup with user file
-mkdir -p "$BACKUP_DIR/agents"
-echo "user-agent" >"$BACKUP_DIR/agents/my-custom.md"
-# Simulate stowed dir with repo file
-mkdir -p "$STOW_TARGET/.claude/agents"
-echo "repo-agent" >"$STOW_TARGET/.claude/agents/agent-a.md"
-restore_user_files
-assert_file_exists "$STOW_TARGET/.claude/agents/my-custom.md" && pass
-teardown
-
-CURRENT_TEST="does not overwrite existing stowed files"
-setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$BACKUP_DIR/agents"
-echo "backup-version" >"$BACKUP_DIR/agents/agent-a.md"
-mkdir -p "$STOW_TARGET/.claude/agents"
-echo "repo-version" >"$STOW_TARGET/.claude/agents/agent-a.md"
-restore_user_files
-content=$(cat "$STOW_TARGET/.claude/agents/agent-a.md")
-assert_eq "$content" "repo-version" && pass
-teardown
-
-CURRENT_TEST="restores deeply nested user files"
-setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$BACKUP_DIR/commands/sub/deep"
-echo "deep-content" >"$BACKUP_DIR/commands/sub/deep/nested.md"
-mkdir -p "$STOW_TARGET/.claude/commands"
-restore_user_files
-assert_file_exists "$STOW_TARGET/.claude/commands/sub/deep/nested.md" &&
-	content=$(cat "$STOW_TARGET/.claude/commands/sub/deep/nested.md") &&
-	assert_eq "$content" "deep-content" &&
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "user-file" >"$TARGET/.claude/agents/agent-a.md"
+unlink_item "agents/agent-a"
+assert_file_exists "$TARGET/.claude/agents/agent-a.md" &&
+	assert_not_link "$TARGET/.claude/agents/agent-a.md" &&
 	pass
 teardown
 
-CURRENT_TEST="restores files across multiple subdirs"
+CURRENT_TEST="leaves foreign symlinks alone"
 setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$BACKUP_DIR/agents" "$BACKUP_DIR/commands"
-echo "user-a" >"$BACKUP_DIR/agents/custom-a.md"
-echo "user-c" >"$BACKUP_DIR/commands/custom-c.md"
-mkdir -p "$STOW_TARGET/.claude/agents" "$STOW_TARGET/.claude/commands"
-restore_user_files
-assert_file_exists "$STOW_TARGET/.claude/agents/custom-a.md" &&
-	assert_file_exists "$STOW_TARGET/.claude/commands/custom-c.md" &&
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+ln -s "/other/repo/agent-a.md" "$TARGET/.claude/agents/agent-a.md"
+unlink_item "agents/agent-a"
+assert_link "$TARGET/.claude/agents/agent-a.md" &&
+	assert_link_target "$TARGET/.claude/agents/agent-a.md" "/other/repo/agent-a.md" &&
 	pass
 teardown
 
-###############################################################################
-# Tests: do_install (full flow with stow)
 ###############################################################################
 echo ""
-echo "== do_install =="
+echo "== is_ours =="
 
-CURRENT_TEST="installs claude package via stow (clean target)"
+CURRENT_TEST="true for our symlink"
 setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-do_install
-assert_file_exists "$STOW_TARGET/.claude/agents/agent-a.md" &&
-	assert_file_exists "$STOW_TARGET/.claude/commands/cmd-x.md" &&
-	pass
+CLI="claude"
+link_item "agents/agent-a"
+is_ours "$(dest_of agents/agent-a)" && pass
 teardown
 
-CURRENT_TEST="installs opencode package via stow (clean target)"
+CURRENT_TEST="false for foreign symlink"
 setup
-SELECTED_CLI="opencode"
-PACKAGES=("opencode")
-BACKUP_DIR="$STOW_TARGET/.opencode.bak"
-do_install
-assert_file_exists "$STOW_TARGET/.opencode/agents/oc-agent.md" &&
-	assert_file_exists "$STOW_TARGET/.opencode/commands/oc-cmd.md" &&
-	assert_file_exists "$STOW_TARGET/.opencode/skills/api-design/SKILL.md" &&
-	pass
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+ln -s "/other/path" "$TARGET/.claude/agents/agent-a.md"
+! is_ours "$TARGET/.claude/agents/agent-a.md" && pass
 teardown
 
-CURRENT_TEST="install backs up existing user files and restores non-conflicting ones"
+CURRENT_TEST="false for regular file"
 setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-# Pre-existing user file in target
-mkdir -p "$STOW_TARGET/.claude/agents"
-echo "my-custom" >"$STOW_TARGET/.claude/agents/my-custom.md"
-echo "user-a" >"$STOW_TARGET/.claude/agents/agent-a.md"
-do_install
-# Repo file should be stowed
-content_a=$(cat "$STOW_TARGET/.claude/agents/agent-a.md")
-assert_eq "$content_a" "agent-a content" &&
-	# User file should be restored
-	assert_file_exists "$STOW_TARGET/.claude/agents/my-custom.md" &&
-	content_c=$(cat "$STOW_TARGET/.claude/agents/my-custom.md") &&
-	assert_eq "$content_c" "my-custom" &&
-	pass
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "x" >"$TARGET/.claude/agents/agent-a.md"
+! is_ours "$TARGET/.claude/agents/agent-a.md" && pass
 teardown
 
-CURRENT_TEST="install restores nested user files after stow"
+CURRENT_TEST="false for nonexistent"
 setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$STOW_TARGET/.claude/commands/custom-sub"
-echo "nested-user" >"$STOW_TARGET/.claude/commands/custom-sub/my-file.md"
-do_install
-assert_file_exists "$STOW_TARGET/.claude/commands/custom-sub/my-file.md" &&
-	content=$(cat "$STOW_TARGET/.claude/commands/custom-sub/my-file.md") &&
-	assert_eq "$content" "nested-user" &&
-	pass
+CLI="claude"
+! is_ours "$TARGET/.claude/agents/nope.md" && pass
 teardown
 
-CURRENT_TEST="install is idempotent (run twice)"
-setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-do_install
-# Second install should not fail
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-do_install
-assert_file_exists "$STOW_TARGET/.claude/agents/agent-a.md" && pass
-teardown
-
-###############################################################################
-# Tests: do_uninstall
-###############################################################################
-echo ""
-echo "== do_uninstall =="
-
-CURRENT_TEST="uninstall removes stowed symlinks"
-setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-do_install
-do_uninstall
-# After unstow, the directory symlink or files should be gone
-assert_file_missing "$STOW_TARGET/.claude/agents/agent-a.md" && pass
-teardown
-
-CURRENT_TEST="uninstall restores backup and deletes backup dir"
-setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-# Pre-existing user file
-mkdir -p "$STOW_TARGET/.claude/agents"
-echo "my-custom" >"$STOW_TARGET/.claude/agents/my-custom.md"
-do_install
-assert_dir_exists "$BACKUP_DIR"
-do_uninstall
-assert_dir_missing "$BACKUP_DIR" &&
-	assert_file_exists "$STOW_TARGET/.claude/agents/my-custom.md" &&
-	pass
-teardown
-
-CURRENT_TEST="uninstall no-op when no backup exists"
-setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-do_install
-# Manually remove backup if any
-rm -rf "$BACKUP_DIR"
-do_uninstall
-assert_dir_missing "$BACKUP_DIR" && pass
-teardown
-
-###############################################################################
-# Tests: .stow-local-ignore
-###############################################################################
-echo ""
-echo "== .stow-local-ignore =="
-
-CURRENT_TEST="stow ignores node_modules when .stow-local-ignore present"
-setup
-SELECTED_CLI="opencode"
-PACKAGES=("opencode")
-BACKUP_DIR="$STOW_TARGET/.opencode.bak"
-# Add node_modules + artifacts to repo package
-mkdir -p "$REPO_DIR/opencode/.opencode/node_modules/some-pkg"
-echo "pkg-code" >"$REPO_DIR/opencode/.opencode/node_modules/some-pkg/index.js"
-echo '{"name":"test"}' >"$REPO_DIR/opencode/.opencode/package.json"
-echo "lockfile" >"$REPO_DIR/opencode/.opencode/package-lock.json"
-echo "node_modules" >"$REPO_DIR/opencode/.opencode/.gitignore"
-# Create .stow-local-ignore at package root
-cat >"$REPO_DIR/opencode/.stow-local-ignore" <<'IGNORE'
-node_modules
-package\.json
-package-lock\.json
-bun\.lock
-\.gitignore
-IGNORE
-do_install
-# Managed files stowed
-assert_file_exists "$STOW_TARGET/.opencode/agents/oc-agent.md" &&
-	# Ignored artifacts NOT stowed
-	assert_file_missing "$STOW_TARGET/.opencode/node_modules/some-pkg/index.js" &&
-	assert_file_missing "$STOW_TARGET/.opencode/package.json" &&
-	assert_file_missing "$STOW_TARGET/.opencode/package-lock.json" &&
-	assert_file_missing "$STOW_TARGET/.opencode/.gitignore" &&
-	pass
-teardown
-
-CURRENT_TEST="install succeeds when target already has node_modules"
-setup
-SELECTED_CLI="opencode"
-PACKAGES=("opencode")
-BACKUP_DIR="$STOW_TARGET/.opencode.bak"
-# Pre-existing runtime node_modules in target
-mkdir -p "$STOW_TARGET/.opencode/node_modules/@opencode-ai/plugin"
-echo "runtime-pkg" >"$STOW_TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js"
-echo '{"name":"runtime"}' >"$STOW_TARGET/.opencode/package.json"
-# Add artifacts to repo too (should be ignored by stow)
-mkdir -p "$REPO_DIR/opencode/.opencode/node_modules/other-pkg"
-echo "repo-pkg" >"$REPO_DIR/opencode/.opencode/node_modules/other-pkg/index.js"
-cat >"$REPO_DIR/opencode/.stow-local-ignore" <<'IGNORE'
-node_modules
-package\.json
-package-lock\.json
-bun\.lock
-\.gitignore
-IGNORE
-do_install
-# Stowed files present
-assert_file_exists "$STOW_TARGET/.opencode/agents/oc-agent.md" &&
-	# Pre-existing runtime artifacts untouched
-	assert_file_exists "$STOW_TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js" &&
-	content=$(cat "$STOW_TARGET/.opencode/package.json") &&
-	assert_eq "$content" '{"name":"runtime"}' &&
-	pass
-teardown
-
-###############################################################################
-# Tests: uninstall edge cases
-###############################################################################
-echo ""
-echo "== uninstall edge cases =="
-
-CURRENT_TEST="uninstall handles broken symlink config_dir (tree folding)"
-setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-# Pre-existing user files
-mkdir -p "$STOW_TARGET/.claude/agents"
-echo "my-custom" >"$STOW_TARGET/.claude/agents/my-custom.md"
-do_install
-# Simulate tree folding: after unstow, .claude becomes a broken symlink
-# First do the actual unstow
-stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "claude"
-# Now .claude might be gone or a broken symlink depending on stow version
-# Force the broken symlink scenario to test our fix
-rm -rf "$STOW_TARGET/.claude" 2>/dev/null || true
-ln -s "/nonexistent/path" "$STOW_TARGET/.claude"
-# Now run do_uninstall which should handle the broken symlink
-# Reset stow state first (reinstall so unstow has something to do)
-rm "$STOW_TARGET/.claude"
-stow -t "$STOW_TARGET" -d "$REPO_DIR" "claude"
-# Now do_uninstall should work
-do_uninstall
-assert_file_exists "$STOW_TARGET/.claude/agents/my-custom.md" &&
-	assert_dir_missing "$BACKUP_DIR" &&
-	pass
-teardown
-
-CURRENT_TEST="uninstall with broken symlink and backup restores files"
-setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$STOW_TARGET/.claude/agents"
-echo "precious" >"$STOW_TARGET/.claude/agents/precious.md"
-do_install
-# Manually create broken symlink scenario
-for pkg in "${PACKAGES[@]}"; do
-	stow -t "$STOW_TARGET" -d "$REPO_DIR" -D "$pkg"
-done
-# Replace config_dir with broken symlink
-rm -rf "$STOW_TARGET/.claude" 2>/dev/null || true
-ln -s "/nonexistent" "$STOW_TARGET/.claude"
-# Test that our fix handles it
-local_config_dir="$STOW_TARGET/.claude"
-[[ -L "$local_config_dir" ]] && rm "$local_config_dir"
-mkdir -p "$local_config_dir"
-cp -r "$BACKUP_DIR"/* "$local_config_dir/"
-rm -rf "$BACKUP_DIR"
-assert_file_exists "$STOW_TARGET/.claude/agents/precious.md" &&
-	assert_dir_missing "$BACKUP_DIR" &&
-	pass
-teardown
-
-###############################################################################
-# Tests: non-managed files survive
-###############################################################################
-echo ""
-echo "== non-managed files survive =="
-
-CURRENT_TEST="files outside managed dirs survive install"
-setup
-SELECTED_CLI="opencode"
-PACKAGES=("opencode")
-BACKUP_DIR="$STOW_TARGET/.opencode.bak"
-# Pre-existing non-managed file in .opencode
-mkdir -p "$STOW_TARGET/.opencode"
-echo '{"setting":true}' >"$STOW_TARGET/.opencode/settings.json"
-cat >"$REPO_DIR/opencode/.stow-local-ignore" <<'IGNORE'
-node_modules
-package\.json
-package-lock\.json
-bun\.lock
-\.gitignore
-IGNORE
-do_install
-# Non-managed file should survive
-assert_file_exists "$STOW_TARGET/.opencode/settings.json" &&
-	content=$(cat "$STOW_TARGET/.opencode/settings.json") &&
-	assert_eq "$content" '{"setting":true}' &&
-	# Managed files stowed
-	assert_file_exists "$STOW_TARGET/.opencode/agents/oc-agent.md" &&
-	pass
-teardown
-
-CURRENT_TEST="non-managed files survive full install+uninstall cycle"
-setup
-SELECTED_CLI="opencode"
-PACKAGES=("opencode")
-BACKUP_DIR="$STOW_TARGET/.opencode.bak"
-mkdir -p "$STOW_TARGET/.opencode"
-echo "keep-me" >"$STOW_TARGET/.opencode/settings.json"
-cat >"$REPO_DIR/opencode/.stow-local-ignore" <<'IGNORE'
-node_modules
-package\.json
-package-lock\.json
-bun\.lock
-\.gitignore
-IGNORE
-do_install
-do_uninstall
-assert_file_exists "$STOW_TARGET/.opencode/settings.json" &&
-	content=$(cat "$STOW_TARGET/.opencode/settings.json") &&
-	assert_eq "$content" "keep-me" &&
-	pass
-teardown
-
-###############################################################################
-# Tests: managed_dirs edge cases
-###############################################################################
-echo ""
-echo "== managed_dirs edge cases =="
-
-CURRENT_TEST="managed_dirs ignores regular files (only dirs)"
-setup
-SELECTED_CLI="opencode"
-# Add loose files to package config dir
-echo '{"dep":"x"}' >"$REPO_DIR/opencode/.opencode/package.json"
-echo "lockfile" >"$REPO_DIR/opencode/.opencode/package-lock.json"
-echo "ignore" >"$REPO_DIR/opencode/.opencode/.gitignore"
-dirs=$(managed_dirs | sort)
-expected=$(printf "agents\ncommands\nskills")
-assert_eq "$dirs" "$expected" && pass
-teardown
-
-###############################################################################
-# Tests: backup_existing edge cases
-###############################################################################
-echo ""
-echo "== backup_existing edge cases =="
-
-CURRENT_TEST="backup_existing handles mix of symlinks and real dirs"
-setup
-SELECTED_CLI="claude"
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-mkdir -p "$STOW_TARGET/.claude/commands"
-echo "user-cmd" >"$STOW_TARGET/.claude/commands/my-cmd.md"
-# agents is a symlink (from previous stow), commands is a real dir
-ln -s "/tmp" "$STOW_TARGET/.claude/agents"
-backup_existing
-# Only real dir backed up
-assert_file_exists "$BACKUP_DIR/commands/my-cmd.md" &&
-	assert_dir_missing "$BACKUP_DIR/agents" &&
-	# Real dir removed, symlink untouched
-	assert_link "$STOW_TARGET/.claude/agents" &&
-	assert_dir_missing "$STOW_TARGET/.claude/commands" &&
-	pass
-teardown
-
-###############################################################################
-# Tests: full cycle
 ###############################################################################
 echo ""
 echo "== full cycle =="
 
-CURRENT_TEST="install + user restore + uninstall for opencode"
+CURRENT_TEST="install all claude items"
 setup
-SELECTED_CLI="opencode"
-PACKAGES=("opencode")
-BACKUP_DIR="$STOW_TARGET/.opencode.bak"
-# Pre-existing user file in skills
-mkdir -p "$STOW_TARGET/.opencode/skills/my-skill"
-echo "my-skill" >"$STOW_TARGET/.opencode/skills/my-skill/SKILL.md"
-do_install
-# Repo skill present
-assert_file_exists "$STOW_TARGET/.opencode/skills/api-design/SKILL.md" &&
-	# User skill restored
-	assert_file_exists "$STOW_TARGET/.opencode/skills/my-skill/SKILL.md" &&
-	content=$(cat "$STOW_TARGET/.opencode/skills/my-skill/SKILL.md") &&
-	assert_eq "$content" "my-skill"
-do_uninstall
-# After uninstall, user file restored from backup
-assert_file_exists "$STOW_TARGET/.opencode/skills/my-skill/SKILL.md" &&
-	assert_dir_missing "$BACKUP_DIR" &&
+CLI="claude"
+while read -r item; do link_item "$item"; done <<<"$(list_all)"
+assert_link "$(dest_of agents/agent-a)" &&
+	assert_link "$(dest_of agents/agent-b)" &&
+	assert_link "$(dest_of commands/cmd-x)" &&
+	assert_link "$(dest_of commands/cmd-y)" &&
 	pass
 teardown
 
-CURRENT_TEST="uninstall then reinstall works clean"
+CURRENT_TEST="install all opencode items including skills"
 setup
-SELECTED_CLI="claude"
-PACKAGES=("claude")
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-do_install
-assert_file_exists "$STOW_TARGET/.claude/agents/agent-a.md"
-do_uninstall
-assert_file_missing "$STOW_TARGET/.claude/agents/agent-a.md"
-# Reinstall
-BACKUP_DIR="$STOW_TARGET/.claude.bak"
-do_install
-assert_file_exists "$STOW_TARGET/.claude/agents/agent-a.md" &&
-	assert_file_exists "$STOW_TARGET/.claude/commands/cmd-x.md" &&
+CLI="opencode"
+while read -r item; do link_item "$item"; done <<<"$(list_all)"
+assert_link "$(dest_of agents/oc-agent)" &&
+	assert_link "$(dest_of skills/api-design)" &&
+	assert_link "$(dest_of skills/caveman)" &&
 	pass
 teardown
 
-CURRENT_TEST="opencode full cycle with runtime artifacts untouched"
+CURRENT_TEST="uninstall all — clean removal"
 setup
-SELECTED_CLI="opencode"
-PACKAGES=("opencode")
-BACKUP_DIR="$STOW_TARGET/.opencode.bak"
-# Runtime artifacts in target
-mkdir -p "$STOW_TARGET/.opencode/node_modules/@opencode-ai/plugin"
-echo "runtime" >"$STOW_TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js"
-echo '{"name":"rt"}' >"$STOW_TARGET/.opencode/package.json"
-# Runtime artifacts in repo (should be ignored)
-mkdir -p "$REPO_DIR/opencode/.opencode/node_modules/other"
-echo "repo" >"$REPO_DIR/opencode/.opencode/node_modules/other/index.js"
-cat >"$REPO_DIR/opencode/.stow-local-ignore" <<'IGNORE'
-node_modules
-package\.json
-package-lock\.json
-bun\.lock
-\.gitignore
-IGNORE
-# User skill to backup/restore
-mkdir -p "$STOW_TARGET/.opencode/skills/custom"
-echo "custom" >"$STOW_TARGET/.opencode/skills/custom/SKILL.md"
-do_install
-# Everything correct after install
-assert_file_exists "$STOW_TARGET/.opencode/agents/oc-agent.md" &&
-	assert_file_exists "$STOW_TARGET/.opencode/skills/custom/SKILL.md" &&
-	assert_file_exists "$STOW_TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js" &&
-	pkg_content=$(cat "$STOW_TARGET/.opencode/package.json") &&
-	assert_eq "$pkg_content" '{"name":"rt"}'
-do_uninstall
-# After uninstall: user files restored, runtime untouched
-assert_file_exists "$STOW_TARGET/.opencode/skills/custom/SKILL.md" &&
-	assert_file_exists "$STOW_TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js" &&
-	assert_dir_missing "$BACKUP_DIR" &&
+CLI="claude"
+while read -r item; do link_item "$item"; done <<<"$(list_all)"
+while read -r item; do unlink_item "$item"; done <<<"$(list_all)"
+assert_not_exists "$(dest_of agents/agent-a)" &&
+	assert_not_exists "$(dest_of commands/cmd-x)" &&
+	pass
+teardown
+
+CURRENT_TEST="install + uninstall leaves user files untouched"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "my-custom" >"$TARGET/.claude/agents/my-custom.md"
+while read -r item; do link_item "$item"; done <<<"$(list_all)"
+while read -r item; do unlink_item "$item"; done <<<"$(list_all)"
+assert_file_exists "$TARGET/.claude/agents/my-custom.md" &&
+	content=$(cat "$TARGET/.claude/agents/my-custom.md") &&
+	assert_eq "$content" "my-custom" &&
+	pass
+teardown
+
+CURRENT_TEST="runtime artifacts never touched"
+setup
+CLI="opencode"
+mkdir -p "$TARGET/.opencode/node_modules/@opencode-ai/plugin"
+echo "runtime" >"$TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js"
+echo '{"name":"rt"}' >"$TARGET/.opencode/package.json"
+while read -r item; do link_item "$item"; done <<<"$(list_all)"
+assert_file_exists "$TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js" &&
+	assert_file_exists "$TARGET/.opencode/package.json" &&
+	assert_link "$(dest_of skills/api-design)" &&
+	pass
+teardown
+
+CURRENT_TEST="selective install — only some items"
+setup
+CLI="claude"
+link_item "agents/agent-a"
+link_item "commands/cmd-x"
+assert_link "$(dest_of agents/agent-a)" &&
+	assert_not_exists "$(dest_of agents/agent-b)" &&
+	assert_link "$(dest_of commands/cmd-x)" &&
+	assert_not_exists "$(dest_of commands/cmd-y)" &&
+	pass
+teardown
+
+CURRENT_TEST="selective uninstall — only some items"
+setup
+CLI="claude"
+while read -r item; do link_item "$item"; done <<<"$(list_all)"
+unlink_item "agents/agent-a"
+assert_not_exists "$(dest_of agents/agent-a)" &&
+	assert_link "$(dest_of agents/agent-b)" &&
+	assert_link "$(dest_of commands/cmd-x)" &&
+	pass
+teardown
+
+CURRENT_TEST="reinstall after uninstall"
+setup
+CLI="claude"
+link_item "agents/agent-a"
+unlink_item "agents/agent-a"
+assert_not_exists "$(dest_of agents/agent-a)"
+link_item "agents/agent-a"
+assert_link "$(dest_of agents/agent-a)" && pass
+teardown
+
+###############################################################################
+echo ""
+echo "== do_install_all =="
+
+CURRENT_TEST="install_all links every claude item"
+setup
+CLI="claude"
+do_install_all >/dev/null
+assert_link "$(dest_of agents/agent-a)" &&
+	assert_link "$(dest_of agents/agent-b)" &&
+	assert_link "$(dest_of commands/cmd-x)" &&
+	assert_link "$(dest_of commands/cmd-y)" &&
+	pass
+teardown
+
+CURRENT_TEST="install_all links every opencode item including skills"
+setup
+CLI="opencode"
+do_install_all >/dev/null
+assert_link "$(dest_of agents/oc-agent)" &&
+	assert_link "$(dest_of commands/oc-cmd)" &&
+	assert_link "$(dest_of skills/api-design)" &&
+	assert_link "$(dest_of skills/caveman)" &&
+	pass
+teardown
+
+CURRENT_TEST="install_all idempotent — second call is no-op"
+setup
+CLI="claude"
+do_install_all >/dev/null
+do_install_all >/dev/null
+assert_link "$(dest_of agents/agent-a)" &&
+	assert_link "$(dest_of commands/cmd-x)" &&
+	pass
+teardown
+
+CURRENT_TEST="install_all skips user files"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "user-file" >"$TARGET/.claude/agents/agent-a.md"
+output=$(do_install_all 2>&1)
+assert_not_link "$TARGET/.claude/agents/agent-a.md" &&
+	content=$(cat "$TARGET/.claude/agents/agent-a.md") &&
+	assert_eq "$content" "user-file" &&
+	assert_link "$(dest_of agents/agent-b)" &&
+	pass
+teardown
+
+CURRENT_TEST="install_all preserves runtime artifacts"
+setup
+CLI="opencode"
+mkdir -p "$TARGET/.opencode/node_modules/@opencode-ai/plugin"
+echo "runtime" >"$TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js"
+echo '{"name":"rt"}' >"$TARGET/.opencode/package.json"
+do_install_all >/dev/null
+assert_file_exists "$TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js" &&
+	assert_file_exists "$TARGET/.opencode/package.json" &&
+	assert_link "$(dest_of skills/api-design)" &&
 	pass
 teardown
 
 ###############################################################################
-# Summary
+echo ""
+echo "== desc_of / list_display / strip_desc =="
+
+CURRENT_TEST="desc_of extracts description from agent frontmatter"
+setup
+CLI="claude"
+# Add frontmatter to test files
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: First test agent. More details here.
+---
+content
+EOF
+desc=$(desc_of "agents/agent-a")
+assert_eq "$desc" "First test agent" && pass
+teardown
+
+CURRENT_TEST="desc_of extracts description from skill SKILL.md"
+setup
+CLI="opencode"
+cat >"$REPO_DIR/opencode/.opencode/skills/api-design/SKILL.md" <<'EOF'
+---
+name: api-design
+description: REST API design patterns. Including pagination and more.
+---
+content
+EOF
+desc=$(desc_of "skills/api-design")
+assert_eq "$desc" "REST API design patterns" && pass
+teardown
+
+CURRENT_TEST="desc_of returns empty for file without description"
+setup
+CLI="claude"
+# File has no frontmatter description
+echo "just content" >"$REPO_DIR/claude/.claude/agents/agent-a.md"
+desc=$(desc_of "agents/agent-a")
+assert_eq "$desc" "" && pass
+teardown
+
+CURRENT_TEST="list_display appends description"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Agent alpha. Extra info.
+---
+EOF
+cat >"$REPO_DIR/claude/.claude/agents/agent-b.md" <<'EOF'
+---
+description: Agent beta. Extra info.
+---
+EOF
+items=$(list_all)
+display=$(list_display "$items")
+assert_contains "$display" "agents/agent-a — Agent alpha" &&
+	assert_contains "$display" "agents/agent-b — Agent beta" &&
+	pass
+teardown
+
+CURRENT_TEST="list_display omits separator when no description"
+setup
+CLI="claude"
+echo "no frontmatter" >"$REPO_DIR/claude/.claude/agents/agent-a.md"
+items="agents/agent-a"
+display=$(list_display "$items")
+assert_eq "$display" "agents/agent-a" && pass
+teardown
+
+CURRENT_TEST="strip_desc removes description suffix"
+setup
+result=$(echo "agents/agent-a — Some description" | strip_desc)
+assert_eq "$result" "agents/agent-a" && pass
+teardown
+
+CURRENT_TEST="strip_desc is no-op when no description"
+setup
+result=$(echo "agents/agent-a" | strip_desc)
+assert_eq "$result" "agents/agent-a" && pass
+teardown
+
+CURRENT_TEST="desc_of truncates long descriptions to 120 chars"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: This is a very long description that should definitely be truncated because it goes on and on and on and on and on and on and on and on and keeps going
+---
+EOF
+desc=$(desc_of "agents/agent-a")
+[[ ${#desc} -le 120 ]] && assert_contains "$desc" "..." && pass
+teardown
+
+CURRENT_TEST="desc_of uses full text when no period and under 120 chars"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Expert code reviewer for multiple languages
+---
+EOF
+desc=$(desc_of "agents/agent-a")
+assert_eq "$desc" "Expert code reviewer for multiple languages" && pass
+teardown
+
+CURRENT_TEST="desc_of handles YAML quoted description"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: "A comprehensive verification system. With extras."
+---
+EOF
+desc=$(desc_of "agents/agent-a")
+assert_eq "$desc" '"A comprehensive verification system' && pass
+teardown
+
+CURRENT_TEST="list_display mixed — some items with desc, some without"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Has a description. And more.
+---
+EOF
+echo "no frontmatter" >"$REPO_DIR/claude/.claude/agents/agent-b.md"
+items=$(list_all)
+display=$(list_display "$items")
+assert_contains "$display" "agents/agent-a — Has a description" &&
+	assert_contains "$display" "agents/agent-b" &&
+	# agent-b should NOT have " — " separator
+	line_b=$(echo "$display" | grep "^agents/agent-b") &&
+	[[ "$line_b" != *" — "* ]] &&
+	pass
+teardown
+
+CURRENT_TEST="strip_desc handles em dash inside description"
+setup
+# Real case: "agents/code-reviewer — Expert reviewer — quality, security"
+result=$(echo "agents/code-reviewer — Expert reviewer — quality, security" | strip_desc)
+assert_eq "$result" "agents/code-reviewer" && pass
+teardown
+
+CURRENT_TEST="list_all skips empty category directories"
+setup
+CLI="claude"
+mkdir -p "$REPO_DIR/claude/.claude/empty-cat"
+# no .md files inside
+items=$(list_all)
+[[ "$items" != *"empty-cat"* ]] && pass || fail "empty category should not appear"
+teardown
+
+###############################################################################
+echo ""
+echo "== install via display (end-to-end) =="
+
+CURRENT_TEST="strip_desc from display line → link_item works"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Test agent for e2e. Details.
+---
+content
+EOF
+items=$(list_all)
+display=$(list_display "$items")
+# Simulate selecting a display line and stripping desc
+line=$(echo "$display" | grep "^agents/agent-a")
+item=$(echo "$line" | strip_desc)
+link_item "$item"
+assert_link "$(dest_of agents/agent-a)" &&
+	assert_link_target "$(dest_of agents/agent-a)" "$(src_of agents/agent-a)" &&
+	pass
+teardown
+
+CURRENT_TEST="install_all then uninstall via display lines — clean roundtrip"
+setup
+CLI="opencode"
+do_install_all >/dev/null
+# Verify all linked
+assert_link "$(dest_of agents/oc-agent)" &&
+	assert_link "$(dest_of skills/api-design)" || { fail "install_all failed"; }
+# Uninstall each via display flow
+items=$(list_all)
+while read -r item; do
+	unlink_item "$item"
+done <<<"$items"
+assert_not_exists "$(dest_of agents/oc-agent)" &&
+	assert_not_exists "$(dest_of commands/oc-cmd)" &&
+	assert_not_exists "$(dest_of skills/api-design)" &&
+	assert_not_exists "$(dest_of skills/caveman)" &&
+	pass
+teardown
+
 ###############################################################################
 echo ""
 echo "================================"
