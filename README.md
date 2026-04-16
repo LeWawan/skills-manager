@@ -32,6 +32,7 @@ Specialized sub-agents invoked automatically by Claude Code and OpenCode. Claude
 
 | Agent | Stack | Auto-loads |
 |-------|-------|------------|
+| `adonisjs-backend` | AdonisJS 6, Lucid ORM, VineJS | caveman, adonisjs-backend, backend-patterns, database-migrations, postgres-patterns, api-design, security-review |
 | `ruby-rails` | Ruby, Rails 7+, ActiveRecord | caveman, backend-patterns, database-migrations, postgres-patterns, api-design, security-review |
 | `swift-ios` | Swift 6+, SwiftUI, concurrency | caveman, swift-concurrency-6-2, swiftui-patterns, swift-actor-persistence, swift-protocol-di-testing |
 | `kotlin-android` | Kotlin, Jetpack Compose, coroutines | caveman, kotlin-patterns, kotlin-testing, kotlin-coroutines-flows |
@@ -46,7 +47,7 @@ Specialized sub-agents invoked automatically by Claude Code and OpenCode. Claude
 
 Invoke with `/command-name` in Claude Code or OpenCode.
 
-> **Note**: 23 of the 26 commands are also available as OpenCode **Skills** in `.opencode/skills/` for on-demand loading via the `skill` tool. The 3 `shape-up*` commands remain slash-command only.
+> **Note**: 24 of the 27 commands are also available as OpenCode **Skills** in `.opencode/skills/` for on-demand loading via the `skill` tool. The 3 `shape-up*` commands remain slash-command only.
 
 ### Swift / iOS
 
@@ -85,6 +86,7 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 
 | Command | Description |
 |---------|-------------|
+| `/adonisjs-backend` | AdonisJS 6 — controllers, Lucid ORM, VineJS, auth, Bouncer, Japa tests |
 | `/api-design` | REST API design — resources, pagination, error responses |
 | `/backend-patterns` | Backend architecture, API design, DB optimization |
 | `/database-migrations` | Schema changes, rollbacks, zero-downtime deployments |
@@ -120,13 +122,13 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 claude-skills/
   claude/                          # Claude Code package
     .claude/
-      agents/                      # 9 agents → ~/.claude/agents/
-      commands/                    # 26 commands → ~/.claude/commands/
+      agents/                      # 10 agents → ~/.claude/agents/
+      commands/                    # 27 commands → ~/.claude/commands/
   opencode/                        # OpenCode package
     .opencode/
-      agents/                      # 9 agents → ~/.opencode/agents/
-      commands/                    # 26 commands → ~/.opencode/commands/
-      skills/                      # 23 skills → ~/.opencode/skills/
+      agents/                      # 10 agents → ~/.opencode/agents/
+      commands/                    # 27 commands → ~/.opencode/commands/
+      skills/                      # 24 skills → ~/.opencode/skills/
         api-design/SKILL.md
         kotlin-patterns/SKILL.md
         security-review/SKILL.md
@@ -162,6 +164,8 @@ New items added to the repo require re-running `./run` to install them.
 To remove symlinks: `./run` > **Uninstall** > select items to remove.
 
 ## Adding Your Own
+
+> **Symmetry rule**: Every agent, command, or skill must exist on **both** the Claude Code side (`claude/.claude/`) and the OpenCode side (`opencode/.opencode/`). When adding a new item, always create the equivalent in both packages to keep the two CLIs in sync. The formats differ slightly (frontmatter, skill structure) but the content should be the same.
 
 ### For Claude Code
 
