@@ -196,18 +196,69 @@ _source_functions() {
 	list_display() {
 		local items="$1"
 		while read -r item; do
-			local desc
+			local desc ndeps suffix=""
 			desc=$(desc_of "$item")
+			if [[ "$item" == agents/* ]]; then
+				ndeps=$(deps_of "$item" | wc -l | tr -d ' ')
+				[[ "$ndeps" -gt 0 ]] && suffix=" [+${ndeps} deps]"
+			fi
 			if [[ -n "$desc" ]]; then
-				echo "$item — $desc"
+				echo "$item — ${desc}${suffix}"
 			else
-				echo "$item"
+				echo "$item${suffix}"
 			fi
 		done <<<"$items"
 	}
 
 	strip_desc() {
 		sed 's/ — .*//'
+	}
+
+	deps_of() {
+		local item="$1" file
+		[[ "$item" == agents/* ]] || return
+		file="$REPO_DIR/$CLI/.$CLI/$item.md"
+		[[ -f "$file" ]] || return
+		if [[ "$CLI" == "claude" ]]; then
+			grep -o '~/\.claude/commands/[^`]*\.md' "$file" 2>/dev/null |
+				sed 's|~/.claude/commands/||; s|\.md$||; s|^|commands/|'
+		else
+			grep -o '~/\.opencode/skills/[^/]*/SKILL\.md' "$file" 2>/dev/null |
+				sed 's|~/.opencode/skills/||; s|/SKILL\.md$||; s|^|skills/|'
+		fi
+	}
+
+	STANDALONE="caveman coding-standards security-review docker-patterns tdd-workflow verification-loop deep-research"
+
+	all_agent_deps() {
+		local src="$REPO_DIR/$CLI/.$CLI/agents"
+		[[ -d "$src" ]] || return
+		for f in "$src"/*.md; do
+			[[ -f "$f" ]] && deps_of "agents/$(basename "$f" .md)"
+		done | sort -u
+	}
+
+	is_standalone() {
+		local name="${1##*/}"
+		[[ " $STANDALONE " == *" $name "* ]]
+	}
+
+	list_visible() {
+		local all_dep_names
+		all_dep_names=$(all_agent_deps | sed 's|.*/||' | sort -u)
+		list_all | while read -r item; do
+			local name="${item##*/}"
+			if [[ "$item" == agents/* ]]; then
+				echo "$item"
+			elif [[ "$CLI" == "opencode" && "$item" == skills/* ]] &&
+				[[ -f "$REPO_DIR/$CLI/.$CLI/commands/${name}.md" ]]; then
+				continue
+			elif is_standalone "$item"; then
+				echo "$item"
+			elif [[ -z "$all_dep_names" ]] || ! echo "$all_dep_names" | grep -qx "$name"; then
+				echo "$item"
+			fi
+		done
 	}
 }
 
@@ -735,6 +786,256 @@ assert_not_exists "$(dest_of agents/oc-agent)" &&
 	assert_not_exists "$(dest_of skills/api-design)" &&
 	assert_not_exists "$(dest_of skills/caveman)" &&
 	pass
+teardown
+
+###############################################################################
+echo ""
+echo "== deps_of =="
+
+CURRENT_TEST="deps_of extracts claude agent dependencies"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Test agent.
+---
+## Bootstrap
+- `~/.claude/commands/caveman.md`
+- `~/.claude/commands/swift-concurrency-6-2.md`
+- `~/.claude/commands/swiftui-patterns.md`
+EOF
+# Create the referenced commands
+echo "x" >"$REPO_DIR/claude/.claude/commands/caveman.md"
+echo "x" >"$REPO_DIR/claude/.claude/commands/swift-concurrency-6-2.md"
+echo "x" >"$REPO_DIR/claude/.claude/commands/swiftui-patterns.md"
+deps=$(deps_of "agents/agent-a")
+assert_contains "$deps" "commands/caveman" &&
+	assert_contains "$deps" "commands/swift-concurrency-6-2" &&
+	assert_contains "$deps" "commands/swiftui-patterns" &&
+	assert_eq "$(echo "$deps" | wc -l | tr -d ' ')" "3" &&
+	pass
+teardown
+
+CURRENT_TEST="deps_of extracts opencode agent dependencies (skills)"
+setup
+CLI="opencode"
+cat >"$REPO_DIR/opencode/.opencode/agents/oc-agent.md" <<'EOF'
+---
+description: Test OC agent.
+---
+## Bootstrap
+- `~/.opencode/skills/caveman/SKILL.md`
+- `~/.opencode/skills/api-design/SKILL.md`
+EOF
+deps=$(deps_of "agents/oc-agent")
+assert_contains "$deps" "skills/caveman" &&
+	assert_contains "$deps" "skills/api-design" &&
+	assert_eq "$(echo "$deps" | wc -l | tr -d ' ')" "2" &&
+	pass
+teardown
+
+CURRENT_TEST="deps_of returns nothing for non-agent items"
+setup
+CLI="claude"
+deps=$(deps_of "commands/cmd-x")
+assert_eq "$deps" "" && pass
+teardown
+
+CURRENT_TEST="deps_of returns nothing for agent without bootstrap"
+setup
+CLI="claude"
+echo "---
+description: No deps.
+---
+Just content" >"$REPO_DIR/claude/.claude/agents/agent-a.md"
+deps=$(deps_of "agents/agent-a")
+assert_eq "$deps" "" && pass
+teardown
+
+CURRENT_TEST="list_display shows dep count for agents with deps"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Agent with deps. More info.
+---
+## Bootstrap
+- `~/.claude/commands/cmd-x.md`
+- `~/.claude/commands/cmd-y.md`
+EOF
+items="agents/agent-a"
+display=$(list_display "$items")
+assert_contains "$display" "[+2 deps]" && pass
+teardown
+
+CURRENT_TEST="list_display no dep count for agents without deps"
+setup
+CLI="claude"
+echo "---
+description: Agent solo. No deps.
+---
+content" >"$REPO_DIR/claude/.claude/agents/agent-a.md"
+items="agents/agent-a"
+display=$(list_display "$items")
+[[ "$display" != *"[+"* ]] && pass || fail "should not show dep count"
+teardown
+
+CURRENT_TEST="list_display no dep count for commands"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/commands/cmd-x.md" <<'EOF'
+---
+description: A command. Details.
+---
+EOF
+items="commands/cmd-x"
+display=$(list_display "$items")
+[[ "$display" != *"[+"* ]] && pass || fail "commands should not show dep count"
+teardown
+
+###############################################################################
+echo ""
+echo "== list_visible =="
+
+CURRENT_TEST="list_visible hides non-standalone agent deps"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Test agent.
+---
+## Bootstrap
+- `~/.claude/commands/cmd-x.md`
+- `~/.claude/commands/cmd-y.md`
+EOF
+visible=$(list_visible)
+assert_contains "$visible" "agents/agent-a" &&
+	assert_contains "$visible" "agents/agent-b" &&
+	[[ "$visible" != *"commands/cmd-x"* ]] &&
+	[[ "$visible" != *"commands/cmd-y"* ]] &&
+	pass || fail "deps should be hidden"
+teardown
+
+CURRENT_TEST="list_visible keeps standalone deps visible"
+setup
+CLI="claude"
+echo "x" >"$REPO_DIR/claude/.claude/commands/caveman.md"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Test agent.
+---
+## Bootstrap
+- `~/.claude/commands/caveman.md`
+- `~/.claude/commands/cmd-x.md`
+EOF
+visible=$(list_visible)
+assert_contains "$visible" "commands/caveman" &&
+	[[ "$visible" != *"commands/cmd-x"* ]] &&
+	pass || fail "caveman should stay visible, cmd-x should be hidden"
+teardown
+
+CURRENT_TEST="list_visible keeps orphan commands visible"
+setup
+CLI="claude"
+echo "no deps" >"$REPO_DIR/claude/.claude/agents/agent-a.md"
+echo "no deps" >"$REPO_DIR/claude/.claude/agents/agent-b.md"
+visible=$(list_visible)
+assert_contains "$visible" "commands/cmd-x" &&
+	assert_contains "$visible" "commands/cmd-y" &&
+	pass
+teardown
+
+CURRENT_TEST="list_visible works for opencode with skills"
+setup
+CLI="opencode"
+cat >"$REPO_DIR/opencode/.opencode/agents/oc-agent.md" <<'EOF'
+---
+description: Test OC agent.
+---
+## Bootstrap
+- `~/.opencode/skills/api-design/SKILL.md`
+EOF
+visible=$(list_visible)
+assert_contains "$visible" "agents/oc-agent" &&
+	assert_contains "$visible" "commands/oc-cmd" &&
+	assert_contains "$visible" "skills/caveman" &&
+	[[ "$visible" != *"skills/api-design"* ]] &&
+	pass || fail "api-design should be hidden (dep of oc-agent), caveman standalone"
+teardown
+
+CURRENT_TEST="list_visible hides opencode commands matching skill deps"
+setup
+CLI="opencode"
+# Create a command with same name as a skill dep
+echo "x" >"$REPO_DIR/opencode/.opencode/commands/api-design.md"
+cat >"$REPO_DIR/opencode/.opencode/agents/oc-agent.md" <<'EOF'
+---
+description: Test OC agent.
+---
+## Bootstrap
+- `~/.opencode/skills/api-design/SKILL.md`
+EOF
+visible=$(list_visible)
+# skills/api-design is a dep → hidden
+[[ "$visible" != *"skills/api-design"* ]] || { fail "skills/api-design should be hidden"; }
+# commands/api-design should ALSO be hidden (same name as a skill dep)
+[[ "$visible" != *"commands/api-design"* ]] && pass || fail "commands/api-design should be hidden too (matches skill dep)"
+teardown
+
+CURRENT_TEST="list_visible deduplicates opencode commands+skills standalones"
+setup
+CLI="opencode"
+# Ensure caveman exists as BOTH commands/ and skills/
+echo "x" >"$REPO_DIR/opencode/.opencode/commands/caveman.md"
+# skills/caveman already exists from setup()
+echo "no deps" >"$REPO_DIR/opencode/.opencode/agents/oc-agent.md"
+visible=$(list_visible)
+# Should appear exactly once (not both commands/caveman AND skills/caveman)
+caveman_count=$(echo "$visible" | grep -c "caveman")
+assert_eq "$caveman_count" "1" && pass || fail "caveman should appear exactly once, got $caveman_count"
+teardown
+
+CURRENT_TEST="list_visible dedup does not affect claude"
+setup
+CLI="claude"
+# Claude has no skills, so no dedup needed
+visible=$(list_visible)
+assert_contains "$visible" "commands/cmd-x" &&
+	assert_contains "$visible" "commands/cmd-y" &&
+	pass
+teardown
+
+CURRENT_TEST="all_agent_deps collects deps from all agents"
+setup
+CLI="claude"
+cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
+---
+description: Agent A.
+---
+## Bootstrap
+- `~/.claude/commands/cmd-x.md`
+EOF
+cat >"$REPO_DIR/claude/.claude/agents/agent-b.md" <<'EOF'
+---
+description: Agent B.
+---
+## Bootstrap
+- `~/.claude/commands/cmd-y.md`
+EOF
+deps=$(all_agent_deps)
+assert_contains "$deps" "commands/cmd-x" &&
+	assert_contains "$deps" "commands/cmd-y" &&
+	pass
+teardown
+
+CURRENT_TEST="is_standalone returns true for standalone items"
+setup
+is_standalone "commands/caveman" && is_standalone "commands/security-review" && pass
+teardown
+
+CURRENT_TEST="is_standalone returns false for non-standalone items"
+setup
+! is_standalone "commands/swift-concurrency-6-2" && ! is_standalone "skills/api-design" && pass
 teardown
 
 ###############################################################################

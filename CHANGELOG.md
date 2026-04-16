@@ -11,10 +11,13 @@
 - **Granular selection**: Pick individual agents, commands, and skills to install or uninstall via `gum filter --no-limit`
 - **Pre-selection**: Already-installed items are pre-selected when opening the install filter
 - **`is_ours` safety check**: Every operation verifies the symlink points to this repo before touching it
+- **Agent dependency resolution**: Selecting an agent auto-installs its referenced commands/skills from the Bootstrap section
+- **Dep count in selector**: Agents show `[+N deps]` suffix in the gum filter so you know what gets bundled
+- **Smart dep hiding**: Stack-specific deps (e.g. `swift-concurrency-6-2`, `kotlin-patterns`) are hidden from the selector — they install only via their agent. Universally useful items (`caveman`, `coding-standards`, `security-review`, `docker-patterns`, `tdd-workflow`, `verification-loop`, `deep-research`) remain individually selectable
 
 ### Changed
 - **`run` script**: Rewritten from 209 to ~165 lines — simpler, no backup logic, no stow edge cases
-- **`test_run.sh`**: Rewritten with 30 tests covering `list_all`, `src_of`/`dest_of`, `link_item`, `unlink_item`, `is_ours`, `do_install_all`, full cycles, idempotence, selective install/uninstall, user file preservation, and runtime artifact safety
+- **`test_run.sh`**: Rewritten with 59 tests covering all functions including `deps_of`, dependency resolution, and `list_visible` filtering
 
 ### Removed
 - **`opencode/.stow-local-ignore`**: No longer needed (stow removed)

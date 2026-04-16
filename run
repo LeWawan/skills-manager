@@ -5,6 +5,10 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="$HOME"
 CLI=""
 
+# Deps that remain visible in the selector even when referenced by agents.
+# Everything else that's an agent dep gets hidden (installed via its agent).
+STANDALONE="caveman coding-standards security-review docker-patterns tdd-workflow verification-loop deep-research"
+
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
@@ -42,6 +46,61 @@ list_all() {
   done | sort
 }
 
+# Extract dependencies from an agent's Bootstrap section
+# Returns "category/name" lines (commands/* for claude, skills/* for opencode)
+deps_of() {
+  local item="$1" file
+  [[ "$item" == agents/* ]] || return
+  file="$REPO_DIR/$CLI/.$CLI/$item.md"
+  [[ -f "$file" ]] || return
+  if [[ "$CLI" == "claude" ]]; then
+    grep -o '~/\.claude/commands/[^`]*\.md' "$file" 2>/dev/null \
+      | sed 's|~/.claude/commands/||; s|\.md$||; s|^|commands/|'
+  else
+    grep -o '~/\.opencode/skills/[^/]*/SKILL\.md' "$file" 2>/dev/null \
+      | sed 's|~/.opencode/skills/||; s|/SKILL\.md$||; s|^|skills/|'
+  fi
+}
+
+# Collect all deps from all agents (deduplicated)
+all_agent_deps() {
+  local src="$REPO_DIR/$CLI/.$CLI/agents"
+  [[ -d "$src" ]] || return
+  for f in "$src"/*.md; do
+    [[ -f "$f" ]] && deps_of "agents/$(basename "$f" .md)"
+  done | sort -u
+}
+
+# Is this item name in the STANDALONE list?
+is_standalone() {
+  local name="${1##*/}" # "commands/caveman" → "caveman"
+  [[ " $STANDALONE " == *" $name "* ]]
+}
+
+# List items visible in the selector:
+# - All agents
+# - Orphan commands/skills (not a dep of any agent, by name)
+# - Standalone deps (in STANDALONE list even if they're agent deps)
+# - For opencode: deduplicate commands/X + skills/X pairs (show commands/ only)
+list_visible() {
+  local all_dep_names
+  all_dep_names=$(all_agent_deps | sed 's|.*/||' | sort -u)
+  list_all | while read -r item; do
+    local name="${item##*/}"
+    if [[ "$item" == agents/* ]]; then
+      echo "$item"
+    elif [[ "$CLI" == "opencode" && "$item" == skills/* ]] \
+      && [[ -f "$REPO_DIR/$CLI/.$CLI/commands/${name}.md" ]]; then
+      # Skip skills/ when matching commands/ exists (dedup — commands/ wins)
+      continue
+    elif is_standalone "$item"; then
+      echo "$item"
+    elif [[ -z "$all_dep_names" ]] || ! echo "$all_dep_names" | grep -qx "$name"; then
+      echo "$item"
+    fi
+  done
+}
+
 # Extract short description from frontmatter (first sentence, max 60 chars)
 desc_of() {
   local item="$1" file
@@ -59,16 +118,20 @@ desc_of() {
   }' "$file"
 }
 
-# List items with descriptions for display: "category/name — desc"
+# List items with descriptions for display: "category/name — desc [+N deps]"
 list_display() {
   local items="$1"
   while read -r item; do
-    local desc
+    local desc ndeps suffix=""
     desc=$(desc_of "$item")
+    if [[ "$item" == agents/* ]]; then
+      ndeps=$(deps_of "$item" | wc -l | tr -d ' ')
+      [[ "$ndeps" -gt 0 ]] && suffix=" [+${ndeps} deps]"
+    fi
     if [[ -n "$desc" ]]; then
-      echo "$item — $desc"
+      echo "$item — ${desc}${suffix}"
     else
-      echo "$item"
+      echo "$item${suffix}"
     fi
   done <<< "$items"
 }
@@ -105,7 +168,7 @@ is_ours() {
 
 do_install() {
   local items selected count=0
-  items=$(list_all)
+  items=$(list_visible)
   [[ -z "$items" ]] && error "No items found for $CLI"
 
   local display
@@ -138,9 +201,34 @@ do_install() {
 
   [[ -z "$selected" ]] && warn "Nothing selected." && return
 
+  # Resolve agent dependencies: expand selected items to include deps
+  # For opencode: also resolve commands/X → skills/X pairs
+  local resolved=()
   while read -r line; do
     local item
     item=$(echo "$line" | strip_desc)
+    resolved+=("$item")
+    if [[ "$item" == agents/* ]]; then
+      while read -r dep; do
+        [[ -n "$dep" ]] && resolved+=("$dep")
+      done < <(deps_of "$item")
+    elif [[ "$CLI" == "opencode" && "$item" == commands/* ]]; then
+      local name="${item##*/}"
+      [[ -d "$REPO_DIR/$CLI/.$CLI/skills/$name" ]] && resolved+=("skills/$name")
+    fi
+  done <<< "$selected"
+
+  # Deduplicate while preserving order
+  local seen="" unique=()
+  for item in "${resolved[@]}"; do
+    if [[ "$seen" != *"|$item|"* ]]; then
+      seen="${seen}|$item|"
+      unique+=("$item")
+    fi
+  done
+
+  local count=0 deps_count=0
+  for item in "${unique[@]}"; do
     local src=$(src_of "$item") dest=$(dest_of "$item")
     is_ours "$dest" && continue
     if [[ -e "$dest" || -L "$dest" ]]; then
@@ -150,7 +238,7 @@ do_install() {
     mkdir -p "$(dirname "$dest")"
     ln -s "$src" "$dest"
     count=$((count + 1))
-  done <<< "$selected"
+  done
 
   info "Linked $count new item(s) to ~/.$CLI/"
 }
