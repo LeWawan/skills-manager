@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Unit tests for ./run — symlink-based installer.
-# Runs in isolated temp dir, no side effects.
+# Sources run directly (no function duplication). Runs under set -eo pipefail.
 #
 # Usage:  bash test_run.sh
 
-set -o pipefail
+set -eo pipefail
 
 PASS=0
 FAIL=0
@@ -49,6 +49,15 @@ assert_contains() { [[ "$1" == *"$2"* ]] || {
 }; }
 
 # ---------------------------------------------------------------------------
+# Source run (functions only, main won't execute thanks to BASH_SOURCE guard)
+# ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/run"
+
+# Override confirm_fn default — tests set their own per-test
+confirm_fn() { return 1; }
+
+# ---------------------------------------------------------------------------
 # Setup / teardown
 # ---------------------------------------------------------------------------
 TMP=""
@@ -77,190 +86,11 @@ setup() {
 	echo "skill-ad" >"$REPO_DIR/opencode/.opencode/skills/api-design/SKILL.md"
 	echo "skill-cv" >"$REPO_DIR/opencode/.opencode/skills/caveman/SKILL.md"
 
-	# Source functions from run
-	_source_functions
+	# Reset confirm_fn to default (refuse)
+	confirm_fn() { return 1; }
 }
 
 teardown() { [[ -n "$TMP" ]] && rm -rf "$TMP"; }
-
-_source_functions() {
-	GREEN='\033[0;32m'
-	YELLOW='\033[0;33m'
-	RED='\033[0;31m'
-	NC='\033[0m'
-
-	info() { echo -e "${GREEN}[info]${NC} $1"; }
-	warn() { echo -e "${YELLOW}[warn]${NC} $1"; }
-	error() { echo -e "${RED}[error]${NC} $1"; }
-
-	list_all() {
-		local src="$REPO_DIR/$CLI/.$CLI"
-		for dir in "$src"/*/; do
-			local category=$(basename "$dir")
-			[[ "$category" == "node_modules" ]] && continue
-			if [[ "$category" == "skills" ]]; then
-				for skill in "$dir"/*/; do
-					[[ -d "$skill" ]] && echo "skills/$(basename "$skill")"
-				done
-			else
-				for f in "$dir"/*.md; do
-					[[ -f "$f" ]] && echo "$category/$(basename "$f" .md)"
-				done
-			fi
-		done | sort
-	}
-
-	src_of() {
-		local item="$1"
-		if [[ "$item" == skills/* ]]; then
-			echo "$REPO_DIR/$CLI/.$CLI/$item"
-		else
-			echo "$REPO_DIR/$CLI/.$CLI/$item.md"
-		fi
-	}
-
-	dest_of() {
-		local item="$1"
-		if [[ "$item" == skills/* ]]; then
-			echo "$TARGET/.$CLI/$item"
-		else
-			echo "$TARGET/.$CLI/$item.md"
-		fi
-	}
-
-	is_ours() {
-		[[ -L "$1" ]] && [[ "$(readlink "$1")" == "$REPO_DIR"/* ]]
-	}
-
-	link_item() {
-		local item="$1"
-		local src=$(src_of "$item") dest=$(dest_of "$item")
-		is_ours "$dest" && return 0
-		if [[ -e "$dest" || -L "$dest" ]]; then
-			warn "Skip $item — already exists (not ours)"
-			return 0
-		fi
-		mkdir -p "$(dirname "$dest")"
-		ln -s "$src" "$dest"
-	}
-
-	unlink_item() {
-		local item="$1"
-		local dest=$(dest_of "$item")
-		is_ours "$dest" && rm "$dest" && return 0
-		[[ -e "$dest" ]] && warn "Skip $item — not ours"
-	}
-
-	do_install_all() {
-		local items count=0 skipped=0
-		items=$(list_all)
-		[[ -z "$items" ]] && {
-			error "No items found for $CLI"
-			return 1
-		}
-
-		while read -r item; do
-			local src=$(src_of "$item") dest=$(dest_of "$item")
-			is_ours "$dest" && continue
-			if [[ -e "$dest" || -L "$dest" ]]; then
-				warn "Skip $item — already exists (not ours)"
-				skipped=$((skipped + 1))
-				continue
-			fi
-			mkdir -p "$(dirname "$dest")"
-			ln -s "$src" "$dest"
-			count=$((count + 1))
-		done <<<"$items"
-
-		info "Linked $count new item(s) to ~/.$CLI/"
-		[[ $skipped -gt 0 ]] && warn "Skipped $skipped item(s) — already exist (not ours)"
-		return 0
-	}
-
-	desc_of() {
-		local item="$1" file
-		if [[ "$item" == skills/* ]]; then
-			file="$REPO_DIR/$CLI/.$CLI/$item/SKILL.md"
-		else
-			file="$REPO_DIR/$CLI/.$CLI/$item.md"
-		fi
-		[[ -f "$file" ]] || return
-		awk '/^---$/{n++; next} n==1 && /^description:/{
-			sub(/^description: */, "")
-			sub(/\. .*/, "")
-			if (length > 120) { $0 = substr($0, 1, 117) "..." }
-			print; exit
-		}' "$file"
-	}
-
-	list_display() {
-		local items="$1"
-		while read -r item; do
-			local desc ndeps suffix=""
-			desc=$(desc_of "$item")
-			if [[ "$item" == agents/* ]]; then
-				ndeps=$(deps_of "$item" | wc -l | tr -d ' ')
-				[[ "$ndeps" -gt 0 ]] && suffix=" [+${ndeps} deps]"
-			fi
-			if [[ -n "$desc" ]]; then
-				echo "$item — ${desc}${suffix}"
-			else
-				echo "$item${suffix}"
-			fi
-		done <<<"$items"
-	}
-
-	strip_desc() {
-		sed 's/ — .*//'
-	}
-
-	deps_of() {
-		local item="$1" file
-		[[ "$item" == agents/* ]] || return
-		file="$REPO_DIR/$CLI/.$CLI/$item.md"
-		[[ -f "$file" ]] || return
-		if [[ "$CLI" == "claude" ]]; then
-			grep -o '~/\.claude/commands/[^`]*\.md' "$file" 2>/dev/null |
-				sed 's|~/.claude/commands/||; s|\.md$||; s|^|commands/|'
-		else
-			grep -o '~/\.opencode/skills/[^/]*/SKILL\.md' "$file" 2>/dev/null |
-				sed 's|~/.opencode/skills/||; s|/SKILL\.md$||; s|^|skills/|'
-		fi
-	}
-
-	STANDALONE="caveman coding-standards security-review docker-patterns tdd-workflow verification-loop deep-research"
-
-	all_agent_deps() {
-		local src="$REPO_DIR/$CLI/.$CLI/agents"
-		[[ -d "$src" ]] || return
-		for f in "$src"/*.md; do
-			[[ -f "$f" ]] && deps_of "agents/$(basename "$f" .md)"
-		done | sort -u
-	}
-
-	is_standalone() {
-		local name="${1##*/}"
-		[[ " $STANDALONE " == *" $name "* ]]
-	}
-
-	list_visible() {
-		local all_dep_names
-		all_dep_names=$(all_agent_deps | sed 's|.*/||' | sort -u)
-		list_all | while read -r item; do
-			local name="${item##*/}"
-			if [[ "$item" == agents/* ]]; then
-				echo "$item"
-			elif [[ "$CLI" == "opencode" && "$item" == skills/* ]] &&
-				[[ -f "$REPO_DIR/$CLI/.$CLI/commands/${name}.md" ]]; then
-				continue
-			elif is_standalone "$item"; then
-				echo "$item"
-			elif [[ -z "$all_dep_names" ]] || ! echo "$all_dep_names" | grep -qx "$name"; then
-				echo "$item"
-			fi
-		done
-	}
-}
 
 ###############################################################################
 echo ""
@@ -348,25 +178,51 @@ dest=$(dest_of "agents/agent-a")
 assert_link "$dest" && pass
 teardown
 
-CURRENT_TEST="skips if non-symlink file exists"
+CURRENT_TEST="auto-migrates identical non-symlink file"
 setup
 CLI="claude"
 mkdir -p "$TARGET/.claude/agents"
-echo "user-file" >"$TARGET/.claude/agents/agent-a.md"
-output=$(link_item "agents/agent-a" 2>&1)
-assert_not_link "$TARGET/.claude/agents/agent-a.md" &&
-	content=$(cat "$TARGET/.claude/agents/agent-a.md") &&
-	assert_eq "$content" "user-file" &&
+cp "$REPO_DIR/claude/.claude/agents/agent-a.md" "$TARGET/.claude/agents/agent-a.md"
+link_item "agents/agent-a"
+assert_link "$TARGET/.claude/agents/agent-a.md" &&
+	assert_link_target "$TARGET/.claude/agents/agent-a.md" "$(src_of agents/agent-a)" &&
 	pass
 teardown
 
-CURRENT_TEST="skips if foreign symlink exists"
+CURRENT_TEST="auto-migrates different file on confirm yes"
 setup
 CLI="claude"
 mkdir -p "$TARGET/.claude/agents"
-ln -s "/some/other/path" "$TARGET/.claude/agents/agent-a.md"
-output=$(link_item "agents/agent-a" 2>&1)
-assert_link_target "$TARGET/.claude/agents/agent-a.md" "/some/other/path" && pass
+echo "modified" >"$TARGET/.claude/agents/agent-a.md"
+confirm_fn() { return 0; }
+link_item "agents/agent-a"
+assert_link "$TARGET/.claude/agents/agent-a.md" &&
+	assert_link_target "$TARGET/.claude/agents/agent-a.md" "$(src_of agents/agent-a)" &&
+	pass
+teardown
+
+CURRENT_TEST="returns 1 on different file + confirm no"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "modified" >"$TARGET/.claude/agents/agent-a.md"
+confirm_fn() { return 1; }
+rc=0
+link_item "agents/agent-a" || rc=$?
+assert_eq "$rc" "1" &&
+	assert_not_link "$TARGET/.claude/agents/agent-a.md" &&
+	pass
+teardown
+
+CURRENT_TEST="auto-migrates foreign symlink with identical target"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+other="$TMP/other-agent-a.md"
+cp "$REPO_DIR/claude/.claude/agents/agent-a.md" "$other"
+ln -s "$other" "$TARGET/.claude/agents/agent-a.md"
+link_item "agents/agent-a"
+assert_link_target "$TARGET/.claude/agents/agent-a.md" "$(src_of agents/agent-a)" && pass
 teardown
 
 ###############################################################################
@@ -476,6 +332,7 @@ setup
 CLI="claude"
 mkdir -p "$TARGET/.claude/agents"
 echo "my-custom" >"$TARGET/.claude/agents/my-custom.md"
+confirm_fn() { return 0; }
 while read -r item; do link_item "$item"; done <<<"$(list_all)"
 while read -r item; do unlink_item "$item"; done <<<"$(list_all)"
 assert_file_exists "$TARGET/.claude/agents/my-custom.md" &&
@@ -566,15 +423,14 @@ assert_link "$(dest_of agents/agent-a)" &&
 	pass
 teardown
 
-CURRENT_TEST="install_all skips user files"
+CURRENT_TEST="install_all auto-migrates identical user files"
 setup
 CLI="claude"
 mkdir -p "$TARGET/.claude/agents"
-echo "user-file" >"$TARGET/.claude/agents/agent-a.md"
-output=$(do_install_all 2>&1)
-assert_not_link "$TARGET/.claude/agents/agent-a.md" &&
-	content=$(cat "$TARGET/.claude/agents/agent-a.md") &&
-	assert_eq "$content" "user-file" &&
+cp "$REPO_DIR/claude/.claude/agents/agent-a.md" "$TARGET/.claude/agents/agent-a.md"
+do_install_all >/dev/null
+assert_link "$TARGET/.claude/agents/agent-a.md" &&
+	assert_link_target "$TARGET/.claude/agents/agent-a.md" "$(src_of agents/agent-a)" &&
 	assert_link "$(dest_of agents/agent-b)" &&
 	pass
 teardown
@@ -592,6 +448,31 @@ assert_file_exists "$TARGET/.opencode/node_modules/@opencode-ai/plugin/index.js"
 	pass
 teardown
 
+CURRENT_TEST="install_all aborts on migrate conflict refused"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "modified" >"$TARGET/.claude/agents/agent-a.md"
+confirm_fn() { return 1; }
+rc=0
+do_install_all 2>/dev/null || rc=$?
+assert_eq "$rc" "1" &&
+	assert_not_link "$TARGET/.claude/agents/agent-a.md" &&
+	pass
+teardown
+
+CURRENT_TEST="install_all migrates conflict on confirm yes"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "modified" >"$TARGET/.claude/agents/agent-a.md"
+confirm_fn() { return 0; }
+do_install_all >/dev/null
+assert_link "$TARGET/.claude/agents/agent-a.md" &&
+	assert_link "$(dest_of agents/agent-b)" &&
+	pass
+teardown
+
 ###############################################################################
 echo ""
 echo "== desc_of / list_display / strip_desc =="
@@ -599,7 +480,6 @@ echo "== desc_of / list_display / strip_desc =="
 CURRENT_TEST="desc_of extracts description from agent frontmatter"
 setup
 CLI="claude"
-# Add frontmatter to test files
 cat >"$REPO_DIR/claude/.claude/agents/agent-a.md" <<'EOF'
 ---
 description: First test agent. More details here.
@@ -627,7 +507,6 @@ teardown
 CURRENT_TEST="desc_of returns empty for file without description"
 setup
 CLI="claude"
-# File has no frontmatter description
 echo "just content" >"$REPO_DIR/claude/.claude/agents/agent-a.md"
 desc=$(desc_of "agents/agent-a")
 assert_eq "$desc" "" && pass
@@ -707,7 +586,7 @@ description: "A comprehensive verification system. With extras."
 ---
 EOF
 desc=$(desc_of "agents/agent-a")
-assert_eq "$desc" '"A comprehensive verification system' && pass
+assert_eq "$desc" "A comprehensive verification system" && pass
 teardown
 
 CURRENT_TEST="list_display mixed — some items with desc, some without"
@@ -723,7 +602,6 @@ items=$(list_all)
 display=$(list_display "$items")
 assert_contains "$display" "agents/agent-a — Has a description" &&
 	assert_contains "$display" "agents/agent-b" &&
-	# agent-b should NOT have " — " separator
 	line_b=$(echo "$display" | grep "^agents/agent-b") &&
 	[[ "$line_b" != *" — "* ]] &&
 	pass
@@ -731,7 +609,6 @@ teardown
 
 CURRENT_TEST="strip_desc handles em dash inside description"
 setup
-# Real case: "agents/code-reviewer — Expert reviewer — quality, security"
 result=$(echo "agents/code-reviewer — Expert reviewer — quality, security" | strip_desc)
 assert_eq "$result" "agents/code-reviewer" && pass
 teardown
@@ -740,9 +617,72 @@ CURRENT_TEST="list_all skips empty category directories"
 setup
 CLI="claude"
 mkdir -p "$REPO_DIR/claude/.claude/empty-cat"
-# no .md files inside
 items=$(list_all)
 [[ "$items" != *"empty-cat"* ]] && pass || fail "empty category should not appear"
+teardown
+
+###############################################################################
+echo ""
+echo "== unfold_dir (stow directory symlinks) =="
+
+CURRENT_TEST="link_item unfolds stow directory symlink"
+setup
+CLI="claude"
+# Simulate stow: TARGET/agents/ is a dir-symlink into repo
+rm -rf "$TARGET/.claude/agents"
+mkdir -p "$TARGET/.claude"
+ln -s "$REPO_DIR/claude/.claude/agents" "$TARGET/.claude/agents"
+# Verify it's a dir symlink
+[[ -L "$TARGET/.claude/agents" ]] || fail "precondition: should be symlink"
+# Now link an item — should unfold the dir first
+link_item "agents/agent-a"
+# Dir should be a real dir now, not a symlink
+[[ ! -L "$TARGET/.claude/agents" ]] || { fail "dir should no longer be symlink"; }
+[[ -d "$TARGET/.claude/agents" ]] || { fail "dir should exist as real dir"; }
+# The linked item should be a file symlink into repo
+assert_link "$TARGET/.claude/agents/agent-a.md" &&
+	assert_link_target "$TARGET/.claude/agents/agent-a.md" "$REPO_DIR/claude/.claude/agents/agent-a.md" &&
+	pass
+teardown
+
+CURRENT_TEST="unfold preserves other files in stow dir"
+setup
+CLI="claude"
+rm -rf "$TARGET/.claude/agents"
+mkdir -p "$TARGET/.claude"
+ln -s "$REPO_DIR/claude/.claude/agents" "$TARGET/.claude/agents"
+# Link one item to trigger unfold
+link_item "agents/agent-a"
+# agent-b should have been copied from repo during unfold
+assert_file_exists "$TARGET/.claude/agents/agent-b.md" &&
+	[[ ! -L "$TARGET/.claude/agents/agent-b.md" ]] &&
+	pass
+teardown
+
+CURRENT_TEST="unfold does not corrupt repo files"
+setup
+CLI="claude"
+rm -rf "$TARGET/.claude/agents"
+mkdir -p "$TARGET/.claude"
+ln -s "$REPO_DIR/claude/.claude/agents" "$TARGET/.claude/agents"
+link_item "agents/agent-a"
+# Repo source must still be a regular file, not a symlink
+[[ -f "$REPO_DIR/claude/.claude/agents/agent-a.md" && ! -L "$REPO_DIR/claude/.claude/agents/agent-a.md" ]] &&
+	pass || fail "repo file corrupted"
+teardown
+
+CURRENT_TEST="unfold skips non-repo dir symlinks"
+setup
+CLI="claude"
+# Dir symlink pointing somewhere else (not our repo)
+rm -rf "$TARGET/.claude/agents"
+mkdir -p "$TARGET/.claude" "$TMP/other-agents"
+echo "other" >"$TMP/other-agents/agent-a.md"
+ln -s "$TMP/other-agents" "$TARGET/.claude/agents"
+# Just test unfold_dir, not full link_item
+unfold_dir "$TARGET/.claude/agents/agent-a.md"
+# Should NOT unfold — dir is still a symlink (not ours)
+[[ -L "$TARGET/.claude/agents" ]] && pass || fail "should not unfold foreign dir symlink"
 teardown
 
 ###############################################################################
@@ -760,7 +700,6 @@ content
 EOF
 items=$(list_all)
 display=$(list_display "$items")
-# Simulate selecting a display line and stripping desc
 line=$(echo "$display" | grep "^agents/agent-a")
 item=$(echo "$line" | strip_desc)
 link_item "$item"
@@ -773,10 +712,8 @@ CURRENT_TEST="install_all then uninstall via display lines — clean roundtrip"
 setup
 CLI="opencode"
 do_install_all >/dev/null
-# Verify all linked
 assert_link "$(dest_of agents/oc-agent)" &&
 	assert_link "$(dest_of skills/api-design)" || { fail "install_all failed"; }
-# Uninstall each via display flow
 items=$(list_all)
 while read -r item; do
 	unlink_item "$item"
@@ -804,7 +741,6 @@ description: Test agent.
 - `~/.claude/commands/swift-concurrency-6-2.md`
 - `~/.claude/commands/swiftui-patterns.md`
 EOF
-# Create the referenced commands
 echo "x" >"$REPO_DIR/claude/.claude/commands/caveman.md"
 echo "x" >"$REPO_DIR/claude/.claude/commands/swift-concurrency-6-2.md"
 echo "x" >"$REPO_DIR/claude/.claude/commands/swiftui-patterns.md"
@@ -966,7 +902,6 @@ teardown
 CURRENT_TEST="list_visible hides opencode commands matching skill deps"
 setup
 CLI="opencode"
-# Create a command with same name as a skill dep
 echo "x" >"$REPO_DIR/opencode/.opencode/commands/api-design.md"
 cat >"$REPO_DIR/opencode/.opencode/agents/oc-agent.md" <<'EOF'
 ---
@@ -976,21 +911,16 @@ description: Test OC agent.
 - `~/.opencode/skills/api-design/SKILL.md`
 EOF
 visible=$(list_visible)
-# skills/api-design is a dep → hidden
 [[ "$visible" != *"skills/api-design"* ]] || { fail "skills/api-design should be hidden"; }
-# commands/api-design should ALSO be hidden (same name as a skill dep)
 [[ "$visible" != *"commands/api-design"* ]] && pass || fail "commands/api-design should be hidden too (matches skill dep)"
 teardown
 
 CURRENT_TEST="list_visible deduplicates opencode commands+skills standalones"
 setup
 CLI="opencode"
-# Ensure caveman exists as BOTH commands/ and skills/
 echo "x" >"$REPO_DIR/opencode/.opencode/commands/caveman.md"
-# skills/caveman already exists from setup()
 echo "no deps" >"$REPO_DIR/opencode/.opencode/agents/oc-agent.md"
 visible=$(list_visible)
-# Should appear exactly once (not both commands/caveman AND skills/caveman)
 caveman_count=$(echo "$visible" | grep -c "caveman")
 assert_eq "$caveman_count" "1" && pass || fail "caveman should appear exactly once, got $caveman_count"
 teardown
@@ -998,7 +928,6 @@ teardown
 CURRENT_TEST="list_visible dedup does not affect claude"
 setup
 CLI="claude"
-# Claude has no skills, so no dedup needed
 visible=$(list_visible)
 assert_contains "$visible" "commands/cmd-x" &&
 	assert_contains "$visible" "commands/cmd-y" &&
@@ -1036,6 +965,94 @@ teardown
 CURRENT_TEST="is_standalone returns false for non-standalone items"
 setup
 ! is_standalone "commands/swift-concurrency-6-2" && ! is_standalone "skills/api-design" && pass
+teardown
+
+###############################################################################
+echo ""
+echo "== migrate_item =="
+
+CURRENT_TEST="migrate_item replaces identical file with symlink"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+cp "$REPO_DIR/claude/.claude/agents/agent-a.md" "$TARGET/.claude/agents/agent-a.md"
+rc=0
+migrate_item "agents/agent-a" || rc=$?
+assert_eq "$rc" "0" &&
+	assert_link "$(dest_of agents/agent-a)" &&
+	assert_link_target "$(dest_of agents/agent-a)" "$(src_of agents/agent-a)" &&
+	pass
+teardown
+
+CURRENT_TEST="migrate_item returns 2 when no file at dest"
+setup
+CLI="claude"
+rc=0
+migrate_item "agents/agent-a" || rc=$?
+assert_eq "$rc" "2" && pass
+teardown
+
+CURRENT_TEST="migrate_item returns 2 when already ours"
+setup
+CLI="claude"
+link_item "agents/agent-a"
+rc=0
+migrate_item "agents/agent-a" || rc=$?
+assert_eq "$rc" "2" && pass
+teardown
+
+CURRENT_TEST="migrate_item replaces identical skill dir"
+setup
+CLI="opencode"
+mkdir -p "$TARGET/.opencode/skills/api-design"
+cp "$REPO_DIR/opencode/.opencode/skills/api-design/SKILL.md" "$TARGET/.opencode/skills/api-design/SKILL.md"
+rc=0
+migrate_item "skills/api-design" || rc=$?
+assert_eq "$rc" "0" &&
+	assert_link "$(dest_of skills/api-design)" &&
+	pass
+teardown
+
+CURRENT_TEST="migrate_item with conflict replaces on confirm yes"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "modified content" >"$TARGET/.claude/agents/agent-a.md"
+confirm_fn() { return 0; }
+rc=0
+migrate_item "agents/agent-a" || rc=$?
+assert_eq "$rc" "0" &&
+	assert_link "$(dest_of agents/agent-a)" &&
+	pass
+teardown
+
+CURRENT_TEST="migrate_item with conflict returns 1 on confirm no"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+echo "modified content" >"$TARGET/.claude/agents/agent-a.md"
+confirm_fn() { return 1; }
+rc=0
+migrate_item "agents/agent-a" || rc=$?
+assert_eq "$rc" "1" &&
+	assert_not_link "$TARGET/.claude/agents/agent-a.md" &&
+	content=$(cat "$TARGET/.claude/agents/agent-a.md") &&
+	assert_eq "$content" "modified content" &&
+	pass
+teardown
+
+CURRENT_TEST="migrate_item replaces foreign symlink with identical target"
+setup
+CLI="claude"
+mkdir -p "$TARGET/.claude/agents"
+other="$TMP/other-agent-a.md"
+cp "$REPO_DIR/claude/.claude/agents/agent-a.md" "$other"
+ln -s "$other" "$TARGET/.claude/agents/agent-a.md"
+rc=0
+migrate_item "agents/agent-a" || rc=$?
+assert_eq "$rc" "0" &&
+	assert_link_target "$(dest_of agents/agent-a)" "$(src_of agents/agent-a)" &&
+	pass
 teardown
 
 ###############################################################################
