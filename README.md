@@ -22,19 +22,15 @@ Repository: [gitlab.com/delupay/tooling/skills-manager](https://gitlab.com/delup
 
 ## Install
 
-### Quick
-
-Grab the latest build from the [Releases page](https://gitlab.com/delupay/tooling/skills-manager/-/releases) and follow the on-page install section, or (macOS Apple Silicon) run:
+### One-liner (all platforms)
 
 ```bash
-# Replace <TAG> with the latest release tag (e.g. v1.0.0)
-curl -LO "https://gitlab.com/api/v4/projects/delupay%2Ftooling%2Fskills-manager/packages/generic/skills-manager/<TAG>/skills-manager-macos-aarch64.tar.gz"
-tar xzvf skills-manager-macos-aarch64.tar.gz
-xattr -c ./skills-manager 2>/dev/null || true
-./skills-manager
+curl -fsSL https://gitlab.com/delupay/tooling/skills-manager/-/raw/main/install.sh | sh
 ```
 
-For every platform, checksum verification, and building from source, read **[INSTALL.md](INSTALL.md)**.
+The script detects your OS + arch, pulls the matching tarball from the latest [Release](https://gitlab.com/delupay/tooling/skills-manager/-/releases), installs it to `~/.local/share/skills-manager`, and symlinks the binary into `~/.local/bin`. Export `GITLAB_TOKEN` first if your client needs an authenticated pull.
+
+For manual install (per-platform snippets, checksum verification, build from source), read **[INSTALL.md](INSTALL.md)**.
 
 ### Usage
 

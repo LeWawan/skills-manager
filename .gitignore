@@ -35,3 +35,9 @@ pnpm-lock.yaml.bak
 # CI artifacts
 /dist
 version.txt
+
+# Stray local build outputs
+/skills-manager
+/skills-manager-*.tar.gz
+/skills-manager-*.tar.gz.sha256
+/skills-manager-*/

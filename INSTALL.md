@@ -5,7 +5,7 @@ Prebuilt binaries are published on every code release. The [GitLab Releases page
 - **macOS** — Apple Silicon (`aarch64`) and Intel (`x86_64`)
 - **Linux** — `x86_64` (glibc) and `aarch64` (glibc)
 
-Each release's description includes a ready-to-run install snippet for every platform — the sections below mirror that, in case you land on this file first.
+Each tarball bundles the binary **plus** the `claude/` and `opencode/` catalogues, so the installer works anywhere without cloning the repo.
 
 If your platform is not listed, [build from source](#build-from-source).
 
@@ -13,7 +13,8 @@ If your platform is not listed, [build from source](#build-from-source).
 
 ## Table of contents
 
-- [Prebuilt binaries](#prebuilt-binaries)
+- [One-liner install](#one-liner-install)
+- [Manual install](#manual-install)
   - [macOS (Apple Silicon)](#macos-apple-silicon)
   - [macOS (Intel)](#macos-intel)
   - [Linux (x86_64)](#linux-x86_64)
@@ -27,64 +28,69 @@ If your platform is not listed, [build from source](#build-from-source).
 
 ---
 
-## Prebuilt binaries
+## One-liner install
+
+```bash
+curl -fsSL https://gitlab.com/delupay/tooling/skills-manager/-/raw/main/install.sh | sh
+```
+
+Detects OS + arch, pulls the matching tarball from the latest release, installs to `~/.local/share/skills-manager`, and symlinks the binary into `~/.local/bin/skills-manager`.
+
+**Environment overrides:**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SKILLS_MANAGER_VERSION` | *latest* | Pin to a specific tag, e.g. `v1.2.3` |
+| `SKILLS_MANAGER_DIR` | `~/.local/share/skills-manager` | Install root |
+| `SKILLS_MANAGER_BIN` | `~/.local/bin` | Symlink location |
+| `GITLAB_TOKEN` | — | PAT (`read_api` + `read_package_registry`) if authenticated pulls are required |
+
+Inspect the script before piping:
+
+```bash
+curl -fsSL https://gitlab.com/delupay/tooling/skills-manager/-/raw/main/install.sh | less
+```
+
+---
+
+## Manual install
 
 Every asset is served from the project's Generic Package Registry. Replace `<TAG>` with the release you want, e.g. `v1.0.0`.
 
-> **Tip**: the simplest path is to open the [Releases page](https://gitlab.com/delupay/tooling/skills-manager/-/releases), pick a release, and copy the curl snippet already rendered in its description.
+> **Tip**: the simplest manual path is to open the [Releases page](https://gitlab.com/delupay/tooling/skills-manager/-/releases), pick a release, and copy the ready-made snippet from its description.
 
 ### macOS (Apple Silicon)
-
-- Download `skills-manager-macos-aarch64.tar.gz`
-- Clear quarantine: `xattr -c ./skills-manager-macos-aarch64.tar.gz`
-- Extract: `tar xzvf skills-manager-macos-aarch64.tar.gz`
-- Run: `./skills-manager`
 
 ```bash
 curl -LO "https://gitlab.com/api/v4/projects/delupay%2Ftooling%2Fskills-manager/packages/generic/skills-manager/<TAG>/skills-manager-macos-aarch64.tar.gz"
 xattr -c ./skills-manager-macos-aarch64.tar.gz
 tar xzvf skills-manager-macos-aarch64.tar.gz
-./skills-manager
+./skills-manager-macos-aarch64/skills-manager
 ```
 
 ### macOS (Intel)
-
-- Download `skills-manager-macos-x86_64.tar.gz`
-- Clear quarantine: `xattr -c ./skills-manager-macos-x86_64.tar.gz`
-- Extract: `tar xzvf skills-manager-macos-x86_64.tar.gz`
-- Run: `./skills-manager`
 
 ```bash
 curl -LO "https://gitlab.com/api/v4/projects/delupay%2Ftooling%2Fskills-manager/packages/generic/skills-manager/<TAG>/skills-manager-macos-x86_64.tar.gz"
 xattr -c ./skills-manager-macos-x86_64.tar.gz
 tar xzvf skills-manager-macos-x86_64.tar.gz
-./skills-manager
+./skills-manager-macos-x86_64/skills-manager
 ```
 
 ### Linux (x86_64)
 
-- Download `skills-manager-linux-x86_64.tar.gz`
-- Extract: `tar xzvf skills-manager-linux-x86_64.tar.gz`
-- Run: `chmod +x ./skills-manager && ./skills-manager`
-
 ```bash
 curl -LO "https://gitlab.com/api/v4/projects/delupay%2Ftooling%2Fskills-manager/packages/generic/skills-manager/<TAG>/skills-manager-linux-x86_64.tar.gz"
 tar xzvf skills-manager-linux-x86_64.tar.gz
-chmod +x ./skills-manager
-./skills-manager
+./skills-manager-linux-x86_64/skills-manager
 ```
 
 ### Linux (aarch64)
 
-- Download `skills-manager-linux-aarch64.tar.gz`
-- Extract: `tar xzvf skills-manager-linux-aarch64.tar.gz`
-- Run: `chmod +x ./skills-manager && ./skills-manager`
-
 ```bash
 curl -LO "https://gitlab.com/api/v4/projects/delupay%2Ftooling%2Fskills-manager/packages/generic/skills-manager/<TAG>/skills-manager-linux-aarch64.tar.gz"
 tar xzvf skills-manager-linux-aarch64.tar.gz
-chmod +x ./skills-manager
-./skills-manager
+./skills-manager-linux-aarch64/skills-manager
 ```
 
 ---
@@ -105,12 +111,13 @@ A successful check prints `skills-manager-macos-aarch64.tar.gz: OK`.
 
 ## Putting the binary on your PATH
 
-Once the binary runs, move it somewhere on your `PATH`:
+The binary locates its catalogue relative to its own file (following symlinks), so you can move the bundle to a standard location and symlink the binary:
 
 ```bash
-sudo install -m 755 ./skills-manager /usr/local/bin/skills-manager
-# or, without sudo:
-mkdir -p ~/.local/bin && install -m 755 ./skills-manager ~/.local/bin/skills-manager
+# Replace <platform> with macos-aarch64 / macos-x86_64 / linux-x86_64 / linux-aarch64
+mv skills-manager-<platform> ~/.local/share/skills-manager
+mkdir -p ~/.local/bin
+ln -sf ~/.local/share/skills-manager/skills-manager ~/.local/bin/skills-manager
 ```
 
 Then invoke it from anywhere: `skills-manager`.
