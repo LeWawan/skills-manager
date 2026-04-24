@@ -1,0 +1,21 @@
+{
+  "name": "skills-manager-release",
+  "version": "0.0.0-semantically-released",
+  "private": true,
+  "type": "module",
+  "description": "Semantic-release tooling only — Rust binary is the actual project artifact",
+  "engines": {
+    "node": ">=24.5.0"
+  },
+  "scripts": {
+    "semantic-release": "semantic-release"
+  },
+  "devDependencies": {
+    "@semantic-release/commit-analyzer": "^11.1.0",
+    "@semantic-release/gitlab": "^13.2.6",
+    "@semantic-release/npm": "^11.0.3",
+    "@semantic-release/release-notes-generator": "^12.1.0",
+    "conventional-changelog-conventionalcommits": "^8.0.0",
+    "semantic-release": "^24.2.6"
+  }
+}

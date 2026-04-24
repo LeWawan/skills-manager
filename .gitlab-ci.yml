@@ -1,31 +1,39 @@
 # ---------------------------------------------------------------------------
-# CI/CD: test on every push, cross-compile binaries + release on tags `v*`.
+# CI/CD
 #
-# Stages:
-#   - test     : cargo test (every push/MR)
-#   - build    : cross-compile 4 targets via cargo-zigbuild (tags only)
-#   - publish  : upload binaries to GitLab Generic Package Registry (tags)
-#   - release  : create GitLab Release attached to tag (tags only)
+# Flow (aligned with delupay-admin-web / delupay-fasttrack / merchant-web):
+#   - test            : cargo test (every push / MR)
+#   - release         : semantic-release on edge/preprod/prod — creates tag
+#                       + GitLab Release, emits version.txt
+#   - build           : cross-compile 4 targets via cargo-zigbuild, using the
+#                       version produced by semantic-release
+#   - publish         : upload tarballs to the Generic Package Registry and
+#                       attach them as asset links to the existing release
 #
-# Tag convention: v<semver>  (e.g. v0.1.0). Push a tag to trigger a release:
-#   git tag v0.1.0 && git push origin v0.1.0
+# Release branch: `main`.
+# Required CI variables: GITLAB_TOKEN (write_repository + api scope).
 # ---------------------------------------------------------------------------
 
 stages:
   - test
+  - release
   - build
   - publish
-  - release
 
 variables:
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
-  # Reduces debuginfo — faster builds, smaller binaries.
   CARGO_PROFILE_RELEASE_DEBUG: "false"
   PACKAGE_NAME: skills
   PACKAGE_REGISTRY_URL: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$PACKAGE_NAME"
 
-default:
+# ---------------------------------------------------------------------------
+# Test — runs on every push and MR.
+# ---------------------------------------------------------------------------
+test:
+  stage: test
   image: rust:1-bookworm
+  tags:
+    - ci0X-evolix
   cache:
     key:
       files:
@@ -33,12 +41,6 @@ default:
     paths:
       - .cargo/
       - target/
-
-# ---------------------------------------------------------------------------
-# Test — runs on every push and MR.
-# ---------------------------------------------------------------------------
-test:
-  stage: test
   script:
     - cargo test --release --locked
   rules:
@@ -46,27 +48,76 @@ test:
     - if: $CI_COMMIT_BRANCH
 
 # ---------------------------------------------------------------------------
-# Build template — uses cargo-zigbuild to cross-compile from a Linux runner.
-# Zig provides the cross-linker and macOS SDK stubs so we don't need a Mac.
+# Release — semantic-release creates the Git tag + GitLab Release and writes
+# the resolved version to version.txt for downstream jobs.
+# Mirrors the delupay-admin-web `build:release` step (minus the Vite build).
+# ---------------------------------------------------------------------------
+release:semantic:
+  stage: release
+  image: node:24-alpine
+  tags:
+    - ci0X-evolix
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store/
+  script:
+    - apk update && apk upgrade && apk add --no-cache git jq
+    - corepack enable
+    - corepack prepare pnpm@latest --activate
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install
+    - pnpm semantic-release
+    - cat package.json | jq -r '.version' > version.txt
+    - |
+      if [ "$(cat version.txt)" = "0.0.0-semantically-released" ] || [ "$(cat version.txt)" = "0.0.0" ]; then
+        printf 'ERROR: No new version has been tagged\n' >&2
+        exit 1
+      fi
+    - echo "Released version $(cat version.txt)"
+  artifacts:
+    paths:
+      - version.txt
+    expire_in: 1 month
+
+# ---------------------------------------------------------------------------
+# Build template — cross-compile via cargo-zigbuild, read VERSION from the
+# artifact produced by release:semantic.
 # ---------------------------------------------------------------------------
 .build:
   stage: build
+  image: rust:1-bookworm
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - release:semantic
+  cache:
+    key:
+      files:
+        - Cargo.lock
+    paths:
+      - .cargo/
+      - target/
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends python3-pip xz-utils
     - pip install --break-system-packages cargo-zigbuild ziglang
     - rustup target add $TARGET
   script:
+    - VERSION=$(cat version.txt)
     - cargo zigbuild --release --locked --target $TARGET
     - mkdir -p dist
     - cd target/$TARGET/release
-    - tar czf "$CI_PROJECT_DIR/dist/${PACKAGE_NAME}-${CI_COMMIT_TAG}-${TARGET}.tar.gz" skills
+    - tar czf "$CI_PROJECT_DIR/dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" skills
     - cd "$CI_PROJECT_DIR"
-    - sha256sum "dist/${PACKAGE_NAME}-${CI_COMMIT_TAG}-${TARGET}.tar.gz" > "dist/${PACKAGE_NAME}-${CI_COMMIT_TAG}-${TARGET}.tar.gz.sha256"
+    - sha256sum "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" > "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz.sha256"
   artifacts:
     paths:
       - dist/
+      - version.txt
     expire_in: 1 week
 
 build:linux-x86_64:
@@ -98,46 +149,49 @@ build:macos-aarch64:
     TARGET: aarch64-apple-darwin
 
 # ---------------------------------------------------------------------------
-# Publish — upload artifacts to the project's Generic Package Registry so
-# the release assets have stable URLs (job artifacts expire).
+# Publish — upload tarballs to the Generic Package Registry and attach them
+# as asset links on the Release already created by semantic-release.
 # ---------------------------------------------------------------------------
 publish:
   stage: publish
   image: curlimages/curl:latest
+  tags:
+    - ci0X-evolix
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
+    - release:semantic
     - build:linux-x86_64
     - build:linux-aarch64
     - build:macos-x86_64
     - build:macos-aarch64
   script:
+    - VERSION=$(cat version.txt)
+    - TAG="v${VERSION}"
     - |
       for f in dist/*; do
         name=$(basename "$f")
         echo "Uploading $name"
-        curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+        curl --fail --silent --show-error \
+          --header "JOB-TOKEN: $CI_JOB_TOKEN" \
           --upload-file "$f" \
-          "${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${name}"
+          "${PACKAGE_REGISTRY_URL}/${VERSION}/${name}"
       done
-
-# ---------------------------------------------------------------------------
-# Release — create a GitLab Release pointing at the uploaded binaries.
-# ---------------------------------------------------------------------------
-release:
-  stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
-  needs:
-    - publish
-  script:
     - |
-      release-cli create \
-        --name "Release $CI_COMMIT_TAG" \
-        --tag-name "$CI_COMMIT_TAG" \
-        --description "Automated release for $CI_COMMIT_TAG. See CHANGELOG.md for notes." \
-        --assets-link "{\"name\":\"linux-x86_64.tar.gz\",\"url\":\"${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${PACKAGE_NAME}-${CI_COMMIT_TAG}-x86_64-unknown-linux-gnu.tar.gz\",\"link_type\":\"package\"}" \
-        --assets-link "{\"name\":\"linux-aarch64.tar.gz\",\"url\":\"${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${PACKAGE_NAME}-${CI_COMMIT_TAG}-aarch64-unknown-linux-gnu.tar.gz\",\"link_type\":\"package\"}" \
-        --assets-link "{\"name\":\"macos-x86_64.tar.gz\",\"url\":\"${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${PACKAGE_NAME}-${CI_COMMIT_TAG}-x86_64-apple-darwin.tar.gz\",\"link_type\":\"package\"}" \
-        --assets-link "{\"name\":\"macos-aarch64.tar.gz\",\"url\":\"${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${PACKAGE_NAME}-${CI_COMMIT_TAG}-aarch64-apple-darwin.tar.gz\",\"link_type\":\"package\"}"
+      for arch in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64; do
+        case $arch in
+          linux-x86_64)   triple=x86_64-unknown-linux-gnu ;;
+          linux-aarch64)  triple=aarch64-unknown-linux-gnu ;;
+          macos-x86_64)   triple=x86_64-apple-darwin ;;
+          macos-aarch64)  triple=aarch64-apple-darwin ;;
+        esac
+        asset_name="${PACKAGE_NAME}-v${VERSION}-${triple}.tar.gz"
+        asset_url="${PACKAGE_REGISTRY_URL}/${VERSION}/${asset_name}"
+        echo "Attaching $arch -> $asset_url"
+        curl --fail --silent --show-error --request POST \
+          --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+          --data "name=${arch}.tar.gz" \
+          --data-urlencode "url=${asset_url}" \
+          --data "link_type=package" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases/${TAG}/assets/links"
+      done

@@ -6,7 +6,7 @@ Curated collection of custom agents and slash commands for [Claude Code](https:/
 
 ### Option 1 — download a prebuilt binary
 
-Each tagged release on GitLab ships prebuilt binaries for Linux and macOS (x86_64 + aarch64). Find the latest release and grab the one matching your platform:
+Releases are produced by `semantic-release` on every push to `main`. Using the same plugin set as `delupay-admin-web` / `merchant-web` / `delupay-fasttrack` / `delupay-static` (Conventional Commits → version bump → GitLab Release). Each release ships prebuilt binaries for Linux and macOS (x86_64 + aarch64):
 
 ```bash
 # macOS Apple Silicon example — replace TAG with the version you want

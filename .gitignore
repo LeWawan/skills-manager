@@ -26,3 +26,12 @@ opencode/.opencode/.gitignore
 # Added by cargo
 
 /target
+
+# Node — semantic-release tooling only
+node_modules/
+.pnpm-store/
+pnpm-lock.yaml.bak
+
+# CI artifacts
+/dist
+version.txt
