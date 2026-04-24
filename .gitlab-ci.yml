@@ -135,22 +135,27 @@ release:semantic:
     - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - release:semantic
+  # The shell runner is persistent; keep CARGO_HOME in $HOME so the rustup
+  # install survives job cleanup (global `CARGO_HOME` points into the
+  # project dir, which GitLab wipes between jobs).
+  variables:
+    CARGO_HOME: "$HOME/.cargo"
   cache:
     key:
       files:
         - Cargo.lock
     paths:
-      - .cargo/
       - target/
   before_script:
+    - export PATH="$HOME/.cargo/bin:$PATH"
     - |
       if ! command -v rustup >/dev/null 2>&1; then
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
+        export PATH="$HOME/.cargo/bin:$PATH"
       fi
-    - source "$HOME/.cargo/env"
     - rustup target add $TARGET
   script:
-    - source "$HOME/.cargo/env"
+    - export PATH="$HOME/.cargo/bin:$PATH"
     - VERSION=$(cat version.txt)
     - cargo build --release --locked --target $TARGET
     - mkdir -p dist
