@@ -13,7 +13,7 @@ use std::env;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "skills", version)]
+#[command(name = "skills-manager", version)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,

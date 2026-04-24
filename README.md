@@ -1,73 +1,62 @@
-# claude-skills
+# skills-manager
 
-Curated collection of custom agents and slash commands for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [OpenCode](https://opencode.ai). Uses direct symlinks for clean, granular installation.
+> One binary that installs the curated catalog of **Claude Code** and **OpenCode** agents, slash commands, and skills into your shell via safe, granular symlinks.
 
-## Quick Start
+`skills-manager` is an interactive TUI that keeps the assets in this repo and the copies your CLIs consume in `~/.claude` / `~/.opencode` in sync — without ever overwriting your own files. Add an item to the repo once, pick what you want from the menu, done.
 
-### Option 1 — download a prebuilt binary
+Repository: [gitlab.com/delupay/tooling/skills-manager](https://gitlab.com/delupay/tooling/skills-manager)
 
-Releases are produced by `semantic-release` on every push to `main`. Using the same plugin set as `delupay-admin-web` / `merchant-web` / `delupay-fasttrack` / `delupay-static` (Conventional Commits → version bump → GitLab Release). Each release ships prebuilt binaries for Linux and macOS (x86_64 + aarch64):
+---
 
-```bash
-# macOS Apple Silicon example — replace TAG with the version you want
-curl -L -o skills.tar.gz "<gitlab-release-asset-url>"
-tar xzf skills.tar.gz
-chmod +x skills
-# macOS may quarantine unsigned binaries on first run:
-xattr -d com.apple.quarantine skills || true
-./skills
-```
+## Features
 
-Binaries are published to the project's GitLab Package Registry and linked from each Release page.
+- **Interactive TUI** with filterable multi-select (powered by `inquire`)
+- **Safe symlinks** — the installer refuses to touch files it does not own, and confirms before replacing foreign ones
+- **Granular** — install everything, or cherry-pick individual agents / commands / skills
+- **Dependency resolution** — selecting an agent auto-pulls the skills/commands it bootstraps from
+- **`skills convert`** subcommand that regenerates OpenCode skills from the Claude command source of truth
+- **Single static binary** published for Linux and macOS (x86_64 + aarch64)
+- **Zero runtime dependencies** — no `gum`, no Node, no Python, no Homebrew taps
 
-### Option 2 — build from source
+---
 
-```bash
-git clone <repo-url> && cd claude-skills
-cargo run --release
-```
+## Install
 
-Or install the binary once and reuse it:
+### Quick
+
+Grab the latest build from the [Releases page](https://gitlab.com/delupay/tooling/skills-manager/-/releases) and follow the on-page install section, or (macOS Apple Silicon) run:
 
 ```bash
-cargo install --path .
-skills            # runs the interactive menu
+# Replace <TAG> with the latest release tag (e.g. v1.0.0)
+curl -LO "https://gitlab.com/api/v4/projects/delupay%2Ftooling%2Fskills-manager/packages/generic/skills-manager/<TAG>/skills-manager-macos-aarch64.tar.gz"
+tar xzvf skills-manager-macos-aarch64.tar.gz
+xattr -c ./skills-manager 2>/dev/null || true
+./skills-manager
 ```
 
-📚 **Documentation**: [STRUCTURE.md](STRUCTURE.md) | [MIGRATION.md](MIGRATION.md) | [CHANGELOG.md](CHANGELOG.md)
+For every platform, checksum verification, and building from source, read **[INSTALL.md](INSTALL.md)**.
 
-The interactive menu will guide you through:
-1. Selecting your CLI (Claude Code or OpenCode)
-2. Choosing an action: **Install** (selective), **Install all**, or **Uninstall**
-3. Picking individual items to install or remove (in selective mode)
-
-Each agent, command, and skill is symlinked individually — your existing files are never touched. Only symlinks owned by this repo are managed.
-
-### Requirements
-
-- **[Rust toolchain](https://rustup.rs)** (stable). The TUI is built with `inquire` — no external binaries needed.
-
-### CLI subcommands
+### Usage
 
 ```bash
-skills              # interactive menu (default)
-skills run          # same as above
-skills list claude  # debug: list all items + visible items
-skills list opencode
-skills convert      # regenerate OpenCode skills from Claude commands
+skills-manager              # interactive menu (default)
+skills-manager list claude  # debug: list every item + what the selector would show
+skills-manager list opencode
+skills-manager convert      # regenerate OpenCode skills from Claude commands
 ```
 
-### Tests
+The menu walks you through:
+1. Choosing your CLI (**claude** or **opencode**)
+2. Picking an action: **Install** (selective), **Install all**, or **Uninstall**
+3. Selecting items from a filterable list when in selective mode
 
-```bash
-cargo test
-```
+Every agent, command, and skill lands as its own symlink (file for agents/commands, directory for skills). Existing user files are never overwritten — only symlinks owned by this repo are ever managed.
+
+---
 
 ## Agents
 
-Specialized sub-agents invoked automatically by Claude Code and OpenCode. Claude agents bootstrap from slash commands; OpenCode agents bootstrap from skills.
-
-`caveman` is included as a bilingual English/French communication skill in the same file for both CLIs. French mode keeps technical terms in English.
+Sub-agents invoked automatically by Claude Code and OpenCode. Claude agents bootstrap from slash commands; OpenCode agents bootstrap from skills. The `caveman` mode is shipped as a bilingual EN/FR communication skill; the French variant keeps every technical term in English.
 
 | Agent | Stack | Auto-loads |
 |-------|-------|------------|
@@ -84,9 +73,7 @@ Specialized sub-agents invoked automatically by Claude Code and OpenCode. Claude
 
 ## Slash Commands
 
-Invoke with `/command-name` in Claude Code or OpenCode.
-
-> **Note**: 24 of the 27 commands are also available as OpenCode **Skills** in `.opencode/skills/` for on-demand loading via the `skill` tool. The 3 `shape-up*` commands remain slash-command only.
+Invoke with `/command-name` in Claude Code or OpenCode. Most commands are also available as OpenCode **skills** for on-demand loading via the `skill` tool. The three `shape-up*` commands remain slash-command only.
 
 ### Swift / iOS
 
@@ -119,7 +106,7 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 | `/frontend-patterns` | React, Next.js, state management, performance |
 | `/nuxt4-patterns` | Nuxt 4 hydration safety, SSR-safe data fetching |
 | `/coding-standards` | Universal standards for TypeScript, React, Node.js |
-| `/caveman` | Ultra-compressed response mode, with English and French instructions in the same file. French mode keeps technical terms in English |
+| `/caveman` | Ultra-compressed response mode, bilingual EN/FR in the same file |
 
 ### Backend / API
 
@@ -155,156 +142,45 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 | `/shape-up-shape` | Shape raw ideas into ready-to-pitch projects |
 | `/shape-up-bet` | Run betting table and choose cycle work |
 
-## How It Works
+---
+
+## Repository layout
 
 ```
 claude-skills/
-  claude/                          # Claude Code package
-    .claude/
-      agents/                      # agents → ~/.claude/agents/
-      commands/                    # commands → ~/.claude/commands/
-  opencode/                        # OpenCode package
-    .opencode/
-      agents/                      # agents → ~/.opencode/agents/
-      commands/                    # commands → ~/.opencode/commands/
-      skills/                      # skills → ~/.opencode/skills/
-        api-design/SKILL.md
-        kotlin-patterns/SKILL.md
-        security-review/SKILL.md
-        ...
-  src/                             # Rust source
-    main.rs                        # clap dispatch
-    item.rs                        # Item + path resolution
-    discovery.rs                   # list_all, desc_of, deps_of, list_visible
-    link.rs                        # symlink, migrate, unfold
-    ui.rs                          # inquire-based TUI
-    convert.rs                     # Claude commands → OpenCode skills
-  Cargo.toml
+├── claude/.claude/
+│   ├── agents/                      → ~/.claude/agents/
+│   └── commands/                    → ~/.claude/commands/
+├── opencode/.opencode/
+│   ├── agents/                      → ~/.opencode/agents/
+│   ├── commands/                    → ~/.opencode/commands/
+│   └── skills/                      → ~/.opencode/skills/
+│       └── <name>/SKILL.md
+├── src/                             # Rust source of the `skills` binary
+└── Cargo.toml
 ```
 
-Running `skills`:
+Running `skills-manager` creates one symlink per selected item, for example:
 
-1. Choose between **claude** or **opencode**
-2. Pick an action: **Install** (selective), **Install all**, or **Uninstall**
-3. For selective install/uninstall, pick individual items from a filterable list
-4. Each item is symlinked individually (file → file, skill dir → dir)
-5. Existing user files are never overwritten — only our own symlinks are managed
-
-### For Claude Code:
 ```
-~/.claude/agents/agent-name.md   →  claude-skills/claude/.claude/agents/agent-name.md
-~/.claude/commands/cmd-name.md   →  claude-skills/claude/.claude/commands/cmd-name.md
+~/.claude/agents/code-reviewer.md  →  skills-manager/claude/.claude/agents/code-reviewer.md
+~/.opencode/skills/caveman/        →  skills-manager/opencode/.opencode/skills/caveman/
 ```
 
-### For OpenCode:
-```
-~/.opencode/agents/agent-name.md   →  claude-skills/opencode/.opencode/agents/agent-name.md
-~/.opencode/commands/cmd-name.md   →  claude-skills/opencode/.opencode/commands/cmd-name.md
-~/.opencode/skills/skill-name/     →  claude-skills/opencode/.opencode/skills/skill-name/
-```
-
-New items added to the repo require re-running `skills` to install them.
-
-To remove symlinks: `skills` > **Uninstall** > select items to remove.
-
-## Adding Your Own
-
-> **Symmetry rule**: Every agent, command, or skill must exist on **both** the Claude Code side (`claude/.claude/`) and the OpenCode side (`opencode/.opencode/`). When adding a new item, always create the equivalent in both packages to keep the two CLIs in sync. The formats differ slightly (frontmatter, skill structure) but the content should be the same.
-
-### For Claude Code
-
-**Agent**: Create `claude/.claude/agents/my-agent.md`:
-
-```markdown
----
-name: my-agent
-description: What this agent does.
-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-## Bootstrap
+## Documentation
 
-Before starting any task, read and apply the patterns from these skill files:
-- `~/.claude/commands/relevant-skill.md`
+- [INSTALL.md](INSTALL.md) — prebuilt binaries, build from source, troubleshooting
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to add your own agents, commands, and skills
+- [STRUCTURE.md](STRUCTURE.md) — repository and installation layout
+- [MIGRATION.md](MIGRATION.md) — migrating from the older stow-based installer
+- [CHANGELOG.md](CHANGELOG.md) — release history
 
-Your agent system prompt here.
-```
-
-**Command**: Create `claude/.claude/commands/my-command.md` with a skill prompt. Invoke with `/my-command`.
-
-### For OpenCode
-
-**Agent**: Create `opencode/.opencode/agents/my-agent.md`:
-
-```markdown
----
-description: What this agent does
-mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 ---
 
-Your agent system prompt here.
-```
+## License
 
-**Command**: Create `opencode/.opencode/commands/my-command.md`:
+MIT.
 
-```markdown
----
-description: Brief command description
-agent: build
----
-
-Your command prompt here.
-```
-
-**Skill**: Create `opencode/.opencode/skills/my-skill/SKILL.md`:
-
-```markdown
----
-name: my-skill
-description: What this skill does (1-1024 chars)
-license: MIT
-compatibility: opencode
----
-
-Your skill instructions here.
-```
-
-Then re-run `skills` > **Install** or **Install all** to pick up new items.
-
-## CLI Differences
-
-| Feature | Claude Code | OpenCode |
-|---------|-------------|----------|
-| **Agents** | `.claude/agents/*.md` | `.opencode/agents/*.md` |
-| **Commands** | `.claude/commands/*.md` | `.opencode/commands/*.md` |
-| **Skills** | ❌ Not supported | ✅ `.opencode/skills/*/SKILL.md` |
-| **Invocation** | Automatic by task type | `/command` or `skill` tool |
-| **Agent bootstrap** | Command files in `~/.claude/commands/` | Skill files in `~/.opencode/skills/` |
-
-### Skills vs Commands (OpenCode)
-
-- **Commands** (`/command-name`): Directly invoke a prompt template via slash command
-- **Skills** (`skill` tool): On-demand loading of reusable instructions, discovered by agents
-
-Both are included in this repo for maximum flexibility!
-
-## Maintenance
-
-### Updating Skills from Commands
-
-When you add or modify commands in `claude/.claude/commands/`, you can regenerate the OpenCode skills:
-
-```bash
-skills convert
-```
-
-This subcommand converts Claude commands into OpenCode `SKILL.md` format.
-
-Current exception: `shape-up`, `shape-up-shape`, and `shape-up-bet` are intentionally skipped by the converter.
-
-Note: `caveman` is maintained as a bilingual EN/FR skill in the same file for both command and SKILL variants. French mode keeps technical terms in English.
-
-## Credits
-
-Slash commands sourced from [everything-claude-code](https://github.com/affaan-m/everything-claude-code) by @affaan-m.
+Slash commands originally sourced from [everything-claude-code](https://github.com/affaan-m/everything-claude-code) by @affaan-m.

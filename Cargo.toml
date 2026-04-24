@@ -12,7 +12,7 @@ strip = true
 codegen-units = 1
 
 [[bin]]
-name = "skills"
+name = "skills-manager"
 path = "src/main.rs"
 
 [dependencies]

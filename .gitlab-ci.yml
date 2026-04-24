@@ -25,8 +25,24 @@ variables:
   # dir (cacheable); macOS shell jobs let rustup use the default $HOME/.cargo
   # because $HOME is not expanded in this YAML block.
   CARGO_PROFILE_RELEASE_DEBUG: "false"
-  PACKAGE_NAME: skills
+  PACKAGE_NAME: skills-manager
+  BINARY_NAME: skills-manager
   PACKAGE_REGISTRY_URL: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$PACKAGE_NAME"
+
+# ---------------------------------------------------------------------------
+# Paths that must change for a pipeline to build/test/release.
+# Pure doc-only commits (README, INSTALL, CONTRIBUTING, LICENSE, claude/,
+# opencode/, ...) skip the whole flow — nothing to rebuild or reship.
+# ---------------------------------------------------------------------------
+.code-paths: &code-paths
+  - src/**/*
+  - Cargo.toml
+  - Cargo.lock
+  - .gitlab-ci.yml
+  - release.config.cjs
+  - release-commit-partial.hbs
+  - package.json
+  - pnpm-lock.yaml
 
 # ---------------------------------------------------------------------------
 # Test — runs on every push and MR.
@@ -49,7 +65,9 @@ test:
     - cargo test --release --locked
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: *code-paths
     - if: $CI_COMMIT_BRANCH
+      changes: *code-paths
 
 # ---------------------------------------------------------------------------
 # Release — semantic-release creates the Git tag + GitLab Release and writes
@@ -61,6 +79,9 @@ release:semantic:
   image: node:24-alpine
   tags:
     - ci0X-evolix
+  # Runs on every main commit so docs-only pushes still produce a tag /
+  # changelog entry. Builds + publish stay guarded by code-paths — a pure
+  # docs release updates the changelog but keeps the existing binaries.
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
   cache:
@@ -99,6 +120,7 @@ release:semantic:
     - ci0X-evolix
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+      changes: *code-paths
   needs:
     - release:semantic
   variables:
@@ -118,7 +140,7 @@ release:semantic:
     - cargo zigbuild --release --locked --target $TARGET
     - mkdir -p dist
     - ARCHIVE="${PACKAGE_NAME}-${PLATFORM}.tar.gz"
-    - tar -C "target/$TARGET/release" -czf "dist/${ARCHIVE}" skills
+    - tar -C "target/$TARGET/release" -czf "dist/${ARCHIVE}" "${BINARY_NAME}"
     - (cd dist && shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256")
   artifacts:
     paths:
@@ -137,6 +159,7 @@ release:semantic:
     - macos
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+      changes: *code-paths
   needs:
     - release:semantic
   # No CARGO_HOME override here: $HOME is not expanded in YAML `variables:`,
@@ -161,7 +184,7 @@ release:semantic:
     - cargo build --release --locked --target $TARGET
     - mkdir -p dist
     - ARCHIVE="${PACKAGE_NAME}-${PLATFORM}.tar.gz"
-    - tar -C "target/$TARGET/release" -czf "dist/${ARCHIVE}" skills
+    - tar -C "target/$TARGET/release" -czf "dist/${ARCHIVE}" "${BINARY_NAME}"
     - (cd dist && shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256")
   artifacts:
     paths:
@@ -205,6 +228,7 @@ publish:
     - ci0X-evolix
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+      changes: *code-paths
   needs:
     - release:semantic
     - build:linux-x86_64
@@ -246,49 +270,44 @@ publish:
           --data "link_type=other" \
           "${RELEASE_API}/assets/links" >/dev/null
       done
-    # 3. Append an "Install" section to the release description (kept on top
-    #    of whatever semantic-release generated).
+    # 3. Append a neovim-style "Install" section to the release description,
+    #    keeping the semantic-release changelog underneath.
     - |
       existing=$(curl --fail --silent --show-error \
         --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
         "${RELEASE_API}" | jq -r '.description // ""')
       {
+        echo "**${PACKAGE_NAME} v${VERSION}**"
+        echo ""
+        echo "Build type: Release"
+        echo ""
         echo "## Install"
         echo ""
         echo "### macOS (Apple Silicon)"
-        echo '```'
-        echo "curl -LO \"${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-macos-aarch64.tar.gz\""
-        echo "tar xzf ${PACKAGE_NAME}-macos-aarch64.tar.gz"
-        echo "xattr -d com.apple.quarantine skills 2>/dev/null || true"
-        echo "./skills"
-        echo '```'
+        echo "- Download [\`${PACKAGE_NAME}-macos-aarch64.tar.gz\`](${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-macos-aarch64.tar.gz)"
+        echo "- Run \`xattr -c ./${PACKAGE_NAME}-macos-aarch64.tar.gz\` (to avoid the \"unknown developer\" warning)"
+        echo "- Extract: \`tar xzvf ${PACKAGE_NAME}-macos-aarch64.tar.gz\`"
+        echo "- Run \`./${BINARY_NAME}\`"
         echo ""
         echo "### macOS (Intel)"
-        echo '```'
-        echo "curl -LO \"${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-macos-x86_64.tar.gz\""
-        echo "tar xzf ${PACKAGE_NAME}-macos-x86_64.tar.gz"
-        echo "xattr -d com.apple.quarantine skills 2>/dev/null || true"
-        echo "./skills"
-        echo '```'
+        echo "- Download [\`${PACKAGE_NAME}-macos-x86_64.tar.gz\`](${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-macos-x86_64.tar.gz)"
+        echo "- Run \`xattr -c ./${PACKAGE_NAME}-macos-x86_64.tar.gz\` (to avoid the \"unknown developer\" warning)"
+        echo "- Extract: \`tar xzvf ${PACKAGE_NAME}-macos-x86_64.tar.gz\`"
+        echo "- Run \`./${BINARY_NAME}\`"
         echo ""
         echo "### Linux (x86_64)"
-        echo '```'
-        echo "curl -LO \"${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-linux-x86_64.tar.gz\""
-        echo "tar xzf ${PACKAGE_NAME}-linux-x86_64.tar.gz"
-        echo "chmod +x skills"
-        echo "./skills"
-        echo '```'
+        echo "- Download [\`${PACKAGE_NAME}-linux-x86_64.tar.gz\`](${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-linux-x86_64.tar.gz)"
+        echo "- Extract: \`tar xzvf ${PACKAGE_NAME}-linux-x86_64.tar.gz\`"
+        echo "- Run \`chmod +x ./${BINARY_NAME} && ./${BINARY_NAME}\`"
         echo ""
         echo "### Linux (aarch64)"
-        echo '```'
-        echo "curl -LO \"${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-linux-aarch64.tar.gz\""
-        echo "tar xzf ${PACKAGE_NAME}-linux-aarch64.tar.gz"
-        echo "chmod +x skills"
-        echo "./skills"
-        echo '```'
+        echo "- Download [\`${PACKAGE_NAME}-linux-aarch64.tar.gz\`](${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-linux-aarch64.tar.gz)"
+        echo "- Extract: \`tar xzvf ${PACKAGE_NAME}-linux-aarch64.tar.gz\`"
+        echo "- Run \`chmod +x ./${BINARY_NAME} && ./${BINARY_NAME}\`"
         echo ""
         echo "### Checksums"
-        echo "Each tarball ships with a \`.sha256\` asset — verify with \`shasum -a 256 -c <file>.sha256\`."
+        echo ""
+        echo "Each tarball ships a \`.sha256\` sidecar attached to this Release — verify with \`shasum -a 256 -c <file>.sha256\`."
         echo ""
         echo "---"
         echo ""

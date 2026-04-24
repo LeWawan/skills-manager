@@ -7,7 +7,7 @@ claude-skills/
 ├── MIGRATION.md                 # Migration guide
 ├── STRUCTURE.md                 # This file
 ├── .gitignore                   # Git ignore rules
-├── Cargo.toml                   # Rust crate manifest (binary: `skills`)
+├── Cargo.toml                   # Rust crate manifest (binary: `skills-manager`)
 ├── Cargo.lock
 ├── src/                         # Rust source — replaces run/convert-to-skills.sh/test_run.sh
 │   ├── main.rs                  # clap dispatch
