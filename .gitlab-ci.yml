@@ -85,12 +85,14 @@ release:semantic:
     expire_in: 1 month
 
 # ---------------------------------------------------------------------------
-# Build template — cross-compile via cargo-zigbuild, read VERSION from the
-# artifact produced by release:semantic.
+# Linux build — runs in Docker on ci0X-evolix, cross-compiles via
+# cargo-zigbuild (one runner covers x86_64 + aarch64 targets).
 # ---------------------------------------------------------------------------
-.build:
+.build-linux:
   stage: build
   image: rust:1-bookworm
+  tags:
+    - ci0X-evolix
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
   needs:
@@ -113,7 +115,49 @@ release:semantic:
     - cd target/$TARGET/release
     - tar czf "$CI_PROJECT_DIR/dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" skills
     - cd "$CI_PROJECT_DIR"
-    - sha256sum "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" > "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz.sha256"
+    - shasum -a 256 "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" > "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz.sha256"
+  artifacts:
+    paths:
+      - dist/
+      - version.txt
+    expire_in: 1 week
+
+# ---------------------------------------------------------------------------
+# macOS build — runs natively on the `macos` runner (shell executor, no
+# Docker). Cross-compile is handled by Apple's toolchain, no zigbuild needed.
+# Assumes rustup is provisioned on the runner.
+# ---------------------------------------------------------------------------
+.build-macos:
+  stage: build
+  tags:
+    - macos
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - release:semantic
+  cache:
+    key:
+      files:
+        - Cargo.lock
+    paths:
+      - .cargo/
+      - target/
+  before_script:
+    - |
+      if ! command -v rustup >/dev/null 2>&1; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+      fi
+    - source "$HOME/.cargo/env"
+    - rustup target add $TARGET
+  script:
+    - source "$HOME/.cargo/env"
+    - VERSION=$(cat version.txt)
+    - cargo build --release --locked --target $TARGET
+    - mkdir -p dist
+    - cd target/$TARGET/release
+    - tar czf "$CI_PROJECT_DIR/dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" skills
+    - cd "$CI_PROJECT_DIR"
+    - shasum -a 256 "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" > "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz.sha256"
   artifacts:
     paths:
       - dist/
@@ -121,30 +165,22 @@ release:semantic:
     expire_in: 1 week
 
 build:linux-x86_64:
-  extends: .build
-  tags:
-    - ci0X-evolix
+  extends: .build-linux
   variables:
     TARGET: x86_64-unknown-linux-gnu
 
 build:linux-aarch64:
-  extends: .build
-  tags:
-    - ci0X-evolix
+  extends: .build-linux
   variables:
     TARGET: aarch64-unknown-linux-gnu
 
 build:macos-x86_64:
-  extends: .build
-  tags:
-    - macos
+  extends: .build-macos
   variables:
     TARGET: x86_64-apple-darwin
 
 build:macos-aarch64:
-  extends: .build
-  tags:
-    - macos
+  extends: .build-macos
   variables:
     TARGET: aarch64-apple-darwin
 
