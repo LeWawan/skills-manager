@@ -115,13 +115,11 @@ release:semantic:
     - pip install --break-system-packages cargo-zigbuild ziglang
     - rustup target add $TARGET
   script:
-    - VERSION=$(cat version.txt)
     - cargo zigbuild --release --locked --target $TARGET
     - mkdir -p dist
-    - cd target/$TARGET/release
-    - tar czf "$CI_PROJECT_DIR/dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" skills
-    - cd "$CI_PROJECT_DIR"
-    - shasum -a 256 "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" > "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz.sha256"
+    - ARCHIVE="${PACKAGE_NAME}-${PLATFORM}.tar.gz"
+    - tar -C "target/$TARGET/release" -czf "dist/${ARCHIVE}" skills
+    - (cd dist && shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256")
   artifacts:
     paths:
       - dist/
@@ -160,13 +158,11 @@ release:semantic:
     - rustup target add $TARGET
   script:
     - export PATH="$HOME/.cargo/bin:$PATH"
-    - VERSION=$(cat version.txt)
     - cargo build --release --locked --target $TARGET
     - mkdir -p dist
-    - cd target/$TARGET/release
-    - tar czf "$CI_PROJECT_DIR/dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" skills
-    - cd "$CI_PROJECT_DIR"
-    - shasum -a 256 "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz" > "dist/${PACKAGE_NAME}-v${VERSION}-${TARGET}.tar.gz.sha256"
+    - ARCHIVE="${PACKAGE_NAME}-${PLATFORM}.tar.gz"
+    - tar -C "target/$TARGET/release" -czf "dist/${ARCHIVE}" skills
+    - (cd dist && shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256")
   artifacts:
     paths:
       - dist/
@@ -177,29 +173,34 @@ build:linux-x86_64:
   extends: .build-linux
   variables:
     TARGET: x86_64-unknown-linux-gnu
+    PLATFORM: linux-x86_64
 
 build:linux-aarch64:
   extends: .build-linux
   variables:
     TARGET: aarch64-unknown-linux-gnu
+    PLATFORM: linux-aarch64
 
 build:macos-x86_64:
   extends: .build-macos
   variables:
     TARGET: x86_64-apple-darwin
+    PLATFORM: macos-x86_64
 
 build:macos-aarch64:
   extends: .build-macos
   variables:
     TARGET: aarch64-apple-darwin
+    PLATFORM: macos-aarch64
 
 # ---------------------------------------------------------------------------
-# Publish — upload tarballs to the Generic Package Registry and attach them
-# as asset links on the Release already created by semantic-release.
+# Publish — upload every tarball + sha256 to the Generic Package Registry,
+# attach them as asset links on the Release, and append a neovim-style
+# "Install" section to the release description.
 # ---------------------------------------------------------------------------
 publish:
   stage: publish
-  image: curlimages/curl:latest
+  image: alpine:latest
   tags:
     - ci0X-evolix
   rules:
@@ -211,10 +212,13 @@ publish:
     - build:macos-x86_64
     - build:macos-aarch64
   script:
+    - apk add --no-cache curl jq
     - VERSION=$(cat version.txt)
     - TAG="v${VERSION}"
+    - RELEASE_API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases/${TAG}"
+    # 1. Upload tarballs + sha256 files to the generic package registry.
     - |
-      for f in dist/*; do
+      for f in dist/*.tar.gz dist/*.sha256; do
         name=$(basename "$f")
         echo "Uploading $name"
         curl --fail --silent --show-error \
@@ -222,21 +226,78 @@ publish:
           --upload-file "$f" \
           "${PACKAGE_REGISTRY_URL}/${VERSION}/${name}"
       done
+    # 2. Attach asset links (tarball + checksum) for each platform.
     - |
-      for arch in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64; do
-        case $arch in
-          linux-x86_64)   triple=x86_64-unknown-linux-gnu ;;
-          linux-aarch64)  triple=aarch64-unknown-linux-gnu ;;
-          macos-x86_64)   triple=x86_64-apple-darwin ;;
-          macos-aarch64)  triple=aarch64-apple-darwin ;;
-        esac
-        asset_name="${PACKAGE_NAME}-v${VERSION}-${triple}.tar.gz"
-        asset_url="${PACKAGE_REGISTRY_URL}/${VERSION}/${asset_name}"
-        echo "Attaching $arch -> $asset_url"
+      for platform in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64; do
+        archive="${PACKAGE_NAME}-${platform}.tar.gz"
+        tarball_url="${PACKAGE_REGISTRY_URL}/${VERSION}/${archive}"
+        sha_url="${PACKAGE_REGISTRY_URL}/${VERSION}/${archive}.sha256"
+        echo "Linking $platform"
         curl --fail --silent --show-error --request POST \
           --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          --data "name=${arch}.tar.gz" \
-          --data-urlencode "url=${asset_url}" \
+          --data "name=${archive}" \
+          --data-urlencode "url=${tarball_url}" \
           --data "link_type=package" \
-          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases/${TAG}/assets/links"
+          "${RELEASE_API}/assets/links" >/dev/null
+        curl --fail --silent --show-error --request POST \
+          --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+          --data "name=${archive}.sha256" \
+          --data-urlencode "url=${sha_url}" \
+          --data "link_type=other" \
+          "${RELEASE_API}/assets/links" >/dev/null
       done
+    # 3. Append an "Install" section to the release description (kept on top
+    #    of whatever semantic-release generated).
+    - |
+      existing=$(curl --fail --silent --show-error \
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        "${RELEASE_API}" | jq -r '.description // ""')
+      {
+        echo "## Install"
+        echo ""
+        echo "### macOS (Apple Silicon)"
+        echo '```'
+        echo "curl -LO \"${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-macos-aarch64.tar.gz\""
+        echo "tar xzf ${PACKAGE_NAME}-macos-aarch64.tar.gz"
+        echo "xattr -d com.apple.quarantine skills 2>/dev/null || true"
+        echo "./skills"
+        echo '```'
+        echo ""
+        echo "### macOS (Intel)"
+        echo '```'
+        echo "curl -LO \"${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-macos-x86_64.tar.gz\""
+        echo "tar xzf ${PACKAGE_NAME}-macos-x86_64.tar.gz"
+        echo "xattr -d com.apple.quarantine skills 2>/dev/null || true"
+        echo "./skills"
+        echo '```'
+        echo ""
+        echo "### Linux (x86_64)"
+        echo '```'
+        echo "curl -LO \"${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-linux-x86_64.tar.gz\""
+        echo "tar xzf ${PACKAGE_NAME}-linux-x86_64.tar.gz"
+        echo "chmod +x skills"
+        echo "./skills"
+        echo '```'
+        echo ""
+        echo "### Linux (aarch64)"
+        echo '```'
+        echo "curl -LO \"${PACKAGE_REGISTRY_URL}/${VERSION}/${PACKAGE_NAME}-linux-aarch64.tar.gz\""
+        echo "tar xzf ${PACKAGE_NAME}-linux-aarch64.tar.gz"
+        echo "chmod +x skills"
+        echo "./skills"
+        echo '```'
+        echo ""
+        echo "### Checksums"
+        echo "Each tarball ships with a \`.sha256\` asset — verify with \`shasum -a 256 -c <file>.sha256\`."
+        echo ""
+        echo "---"
+        echo ""
+        echo "$existing"
+      } > release-body.md
+      jq -Rs '{description: .}' release-body.md > release-body.json
+      curl --fail --silent --show-error --request PUT \
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        --header "Content-Type: application/json" \
+        --data "@release-body.json" \
+        "${RELEASE_API}" >/dev/null
+      echo "Release description updated."
