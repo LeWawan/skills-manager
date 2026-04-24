@@ -6,7 +6,7 @@ The installer no longer uses GNU Stow. It creates individual symlinks per file/s
 
 ### What changed
 
-- **No more stow dependency** — only `gum` is required
+- **No more stow dependency** — the installer is a self-contained Rust binary (no external runtime deps)
 - **No backup/restore** — user files are never overwritten; only our own symlinks are managed
 - **Granular selection** — pick individual agents, commands, and skills to install
 - **"Install all" option** — install everything at once without selection
@@ -17,13 +17,13 @@ The installer no longer uses GNU Stow. It creates individual symlinks per file/s
    ```bash
    git stash   # if you have local changes
    git checkout main
-   ./run       # Select CLI > Uninstall skills
+   skills       # Select CLI > Uninstall skills
    ```
 
 2. **Switch to the new branch and install**:
    ```bash
    git checkout feat/drop-stow-direct-symlinks  # or main once merged
-   ./run       # Select CLI > Install all (or Install for selective)
+   skills       # Select CLI > Install all (or Install for selective)
    ```
 
 3. **Verify**: check that your items are symlinked:
@@ -41,8 +41,8 @@ If you're already using this repo with Claude Code and want to try OpenCode:
 You can install for both CLIs simultaneously:
 
 ```bash
-./run   # Select: claude > Install all
-./run   # Select: opencode > Install all
+skills   # Select: claude > Install all
+skills   # Select: opencode > Install all
 ```
 
 Both coexist peacefully in separate directories.
@@ -51,19 +51,19 @@ Both coexist peacefully in separate directories.
 
 1. **Uninstall Claude items**:
    ```bash
-   ./run   # Select: claude > Uninstall > select all
+   skills   # Select: claude > Uninstall > select all
    ```
 
 2. **Install OpenCode items**:
    ```bash
-   ./run   # Select: opencode > Install all
+   skills   # Select: opencode > Install all
    ```
 
 ## New to Both?
 
 Just run:
 ```bash
-./run
+skills
 ```
 
 Select your preferred CLI. The script will guide you through installation.
@@ -94,7 +94,7 @@ Use the api-design skill to review my endpoints
 ## Troubleshooting
 
 ### Symlinks not working
-Make sure you're running `./run` from the repo directory.
+Make sure you're running `skills` (or `cargo run`) from the repo directory — paths are resolved relative to the current working dir.
 
 ### Item skipped during install
 If you see "Skip — already exists (not ours)", there's already a file at that path that isn't one of our symlinks. Remove or rename it manually, then re-run.

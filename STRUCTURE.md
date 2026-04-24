@@ -7,9 +7,16 @@ claude-skills/
 ├── MIGRATION.md                 # Migration guide
 ├── STRUCTURE.md                 # This file
 ├── .gitignore                   # Git ignore rules
-├── run                          # Installation script (direct symlinks)
-├── test_run.sh                  # Unit tests (30 tests)
-├── convert-to-skills.sh         # Command → Skill converter
+├── Cargo.toml                   # Rust crate manifest (binary: `skills`)
+├── Cargo.lock
+├── src/                         # Rust source — replaces run/convert-to-skills.sh/test_run.sh
+│   ├── main.rs                  # clap dispatch
+│   ├── item.rs                  # Item + src_path/dest_path
+│   ├── discovery.rs             # list_all, desc_of, deps_of, list_visible
+│   ├── link.rs                  # symlink, migrate, unfold
+│   ├── ui.rs                    # inquire-based TUI
+│   ├── convert.rs               # Claude commands → OpenCode skills
+│   └── test_fixtures.rs         # test helpers (cfg(test) only)
 │
 ├── claude/                      # Claude Code package
 │   └── .claude/

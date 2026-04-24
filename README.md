@@ -4,9 +4,34 @@ Curated collection of custom agents and slash commands for [Claude Code](https:/
 
 ## Quick Start
 
+### Option 1 — download a prebuilt binary
+
+Each tagged release on GitLab ships prebuilt binaries for Linux and macOS (x86_64 + aarch64). Find the latest release and grab the one matching your platform:
+
+```bash
+# macOS Apple Silicon example — replace TAG with the version you want
+curl -L -o skills.tar.gz "<gitlab-release-asset-url>"
+tar xzf skills.tar.gz
+chmod +x skills
+# macOS may quarantine unsigned binaries on first run:
+xattr -d com.apple.quarantine skills || true
+./skills
+```
+
+Binaries are published to the project's GitLab Package Registry and linked from each Release page.
+
+### Option 2 — build from source
+
 ```bash
 git clone <repo-url> && cd claude-skills
-./run
+cargo run --release
+```
+
+Or install the binary once and reuse it:
+
+```bash
+cargo install --path .
+skills            # runs the interactive menu
 ```
 
 📚 **Documentation**: [STRUCTURE.md](STRUCTURE.md) | [MIGRATION.md](MIGRATION.md) | [CHANGELOG.md](CHANGELOG.md)
@@ -18,11 +43,25 @@ The interactive menu will guide you through:
 
 Each agent, command, and skill is symlinked individually — your existing files are never touched. Only symlinks owned by this repo are managed.
 
-### Dependencies
+### Requirements
 
-Installed automatically if missing (requires [Homebrew](https://brew.sh)):
+- **[Rust toolchain](https://rustup.rs)** (stable). The TUI is built with `inquire` — no external binaries needed.
 
-- **[gum](https://github.com/charmbracelet/gum)** — interactive terminal UI
+### CLI subcommands
+
+```bash
+skills              # interactive menu (default)
+skills run          # same as above
+skills list claude  # debug: list all items + visible items
+skills list opencode
+skills convert      # regenerate OpenCode skills from Claude commands
+```
+
+### Tests
+
+```bash
+cargo test
+```
 
 ## Agents
 
@@ -122,23 +161,28 @@ Invoke with `/command-name` in Claude Code or OpenCode.
 claude-skills/
   claude/                          # Claude Code package
     .claude/
-      agents/                      # 10 agents → ~/.claude/agents/
-      commands/                    # 27 commands → ~/.claude/commands/
+      agents/                      # agents → ~/.claude/agents/
+      commands/                    # commands → ~/.claude/commands/
   opencode/                        # OpenCode package
     .opencode/
-      agents/                      # 10 agents → ~/.opencode/agents/
-      commands/                    # 27 commands → ~/.opencode/commands/
-      skills/                      # 24 skills → ~/.opencode/skills/
+      agents/                      # agents → ~/.opencode/agents/
+      commands/                    # commands → ~/.opencode/commands/
+      skills/                      # skills → ~/.opencode/skills/
         api-design/SKILL.md
         kotlin-patterns/SKILL.md
         security-review/SKILL.md
         ...
-  run                              # installer script
-  test_run.sh                      # unit tests (30 tests)
-  convert-to-skills.sh             # skills converter
+  src/                             # Rust source
+    main.rs                        # clap dispatch
+    item.rs                        # Item + path resolution
+    discovery.rs                   # list_all, desc_of, deps_of, list_visible
+    link.rs                        # symlink, migrate, unfold
+    ui.rs                          # inquire-based TUI
+    convert.rs                     # Claude commands → OpenCode skills
+  Cargo.toml
 ```
 
-Running `./run`:
+Running `skills`:
 
 1. Choose between **claude** or **opencode**
 2. Pick an action: **Install** (selective), **Install all**, or **Uninstall**
@@ -159,9 +203,9 @@ Running `./run`:
 ~/.opencode/skills/skill-name/     →  claude-skills/opencode/.opencode/skills/skill-name/
 ```
 
-New items added to the repo require re-running `./run` to install them.
+New items added to the repo require re-running `skills` to install them.
 
-To remove symlinks: `./run` > **Uninstall** > select items to remove.
+To remove symlinks: `skills` > **Uninstall** > select items to remove.
 
 ## Adding Your Own
 
@@ -226,7 +270,7 @@ compatibility: opencode
 Your skill instructions here.
 ```
 
-Then re-run `./run` > **Install** or **Install all** to pick up new items.
+Then re-run `skills` > **Install** or **Install all** to pick up new items.
 
 ## CLI Differences
 
@@ -252,10 +296,10 @@ Both are included in this repo for maximum flexibility!
 When you add or modify commands in `claude/.claude/commands/`, you can regenerate the OpenCode skills:
 
 ```bash
-./convert-to-skills.sh
+skills convert
 ```
 
-This script automatically converts Claude commands into OpenCode `SKILL.md` format.
+This subcommand converts Claude commands into OpenCode `SKILL.md` format.
 
 Current exception: `shape-up`, `shape-up-shape`, and `shape-up-bet` are intentionally skipped by the converter.
 
