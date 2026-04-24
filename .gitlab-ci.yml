@@ -21,7 +21,9 @@ stages:
   - publish
 
 variables:
-  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  # CARGO_HOME is set per-job: Linux Docker jobs scope it into the project
+  # dir (cacheable); macOS shell jobs let rustup use the default $HOME/.cargo
+  # because $HOME is not expanded in this YAML block.
   CARGO_PROFILE_RELEASE_DEBUG: "false"
   PACKAGE_NAME: skills
   PACKAGE_REGISTRY_URL: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$PACKAGE_NAME"
@@ -34,6 +36,8 @@ test:
   image: rust:1-bookworm
   tags:
     - ci0X-evolix
+  variables:
+    CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   cache:
     key:
       files:
@@ -97,6 +101,8 @@ release:semantic:
     - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - release:semantic
+  variables:
+    CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   cache:
     key:
       files:
@@ -135,11 +141,9 @@ release:semantic:
     - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - release:semantic
-  # The shell runner is persistent; keep CARGO_HOME in $HOME so the rustup
-  # install survives job cleanup (global `CARGO_HOME` points into the
-  # project dir, which GitLab wipes between jobs).
-  variables:
-    CARGO_HOME: "$HOME/.cargo"
+  # No CARGO_HOME override here: $HOME is not expanded in YAML `variables:`,
+  # so setting CARGO_HOME: "$HOME/.cargo" resolves to "/.cargo" (read-only).
+  # Let rustup pick its default $HOME/.cargo when spawned in the shell.
   cache:
     key:
       files:
