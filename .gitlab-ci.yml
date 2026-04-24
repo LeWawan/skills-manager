@@ -1,0 +1,143 @@
+# ---------------------------------------------------------------------------
+# CI/CD: test on every push, cross-compile binaries + release on tags `v*`.
+#
+# Stages:
+#   - test     : cargo test (every push/MR)
+#   - build    : cross-compile 4 targets via cargo-zigbuild (tags only)
+#   - publish  : upload binaries to GitLab Generic Package Registry (tags)
+#   - release  : create GitLab Release attached to tag (tags only)
+#
+# Tag convention: v<semver>  (e.g. v0.1.0). Push a tag to trigger a release:
+#   git tag v0.1.0 && git push origin v0.1.0
+# ---------------------------------------------------------------------------
+
+stages:
+  - test
+  - build
+  - publish
+  - release
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  # Reduces debuginfo — faster builds, smaller binaries.
+  CARGO_PROFILE_RELEASE_DEBUG: "false"
+  PACKAGE_NAME: skills
+  PACKAGE_REGISTRY_URL: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$PACKAGE_NAME"
+
+default:
+  image: rust:1-bookworm
+  cache:
+    key:
+      files:
+        - Cargo.lock
+    paths:
+      - .cargo/
+      - target/
+
+# ---------------------------------------------------------------------------
+# Test — runs on every push and MR.
+# ---------------------------------------------------------------------------
+test:
+  stage: test
+  script:
+    - cargo test --release --locked
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Build template — uses cargo-zigbuild to cross-compile from a Linux runner.
+# Zig provides the cross-linker and macOS SDK stubs so we don't need a Mac.
+# ---------------------------------------------------------------------------
+.build:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends python3-pip xz-utils
+    - pip install --break-system-packages cargo-zigbuild ziglang
+    - rustup target add $TARGET
+  script:
+    - cargo zigbuild --release --locked --target $TARGET
+    - mkdir -p dist
+    - cd target/$TARGET/release
+    - tar czf "$CI_PROJECT_DIR/dist/${PACKAGE_NAME}-${CI_COMMIT_TAG}-${TARGET}.tar.gz" skills
+    - cd "$CI_PROJECT_DIR"
+    - sha256sum "dist/${PACKAGE_NAME}-${CI_COMMIT_TAG}-${TARGET}.tar.gz" > "dist/${PACKAGE_NAME}-${CI_COMMIT_TAG}-${TARGET}.tar.gz.sha256"
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+build:linux-x86_64:
+  extends: .build
+  tags:
+    - ci0X-evolix
+  variables:
+    TARGET: x86_64-unknown-linux-gnu
+
+build:linux-aarch64:
+  extends: .build
+  tags:
+    - ci0X-evolix
+  variables:
+    TARGET: aarch64-unknown-linux-gnu
+
+build:macos-x86_64:
+  extends: .build
+  tags:
+    - macos
+  variables:
+    TARGET: x86_64-apple-darwin
+
+build:macos-aarch64:
+  extends: .build
+  tags:
+    - macos
+  variables:
+    TARGET: aarch64-apple-darwin
+
+# ---------------------------------------------------------------------------
+# Publish — upload artifacts to the project's Generic Package Registry so
+# the release assets have stable URLs (job artifacts expire).
+# ---------------------------------------------------------------------------
+publish:
+  stage: publish
+  image: curlimages/curl:latest
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+  needs:
+    - build:linux-x86_64
+    - build:linux-aarch64
+    - build:macos-x86_64
+    - build:macos-aarch64
+  script:
+    - |
+      for f in dist/*; do
+        name=$(basename "$f")
+        echo "Uploading $name"
+        curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --upload-file "$f" \
+          "${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${name}"
+      done
+
+# ---------------------------------------------------------------------------
+# Release — create a GitLab Release pointing at the uploaded binaries.
+# ---------------------------------------------------------------------------
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+  needs:
+    - publish
+  script:
+    - |
+      release-cli create \
+        --name "Release $CI_COMMIT_TAG" \
+        --tag-name "$CI_COMMIT_TAG" \
+        --description "Automated release for $CI_COMMIT_TAG. See CHANGELOG.md for notes." \
+        --assets-link "{\"name\":\"linux-x86_64.tar.gz\",\"url\":\"${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${PACKAGE_NAME}-${CI_COMMIT_TAG}-x86_64-unknown-linux-gnu.tar.gz\",\"link_type\":\"package\"}" \
+        --assets-link "{\"name\":\"linux-aarch64.tar.gz\",\"url\":\"${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${PACKAGE_NAME}-${CI_COMMIT_TAG}-aarch64-unknown-linux-gnu.tar.gz\",\"link_type\":\"package\"}" \
+        --assets-link "{\"name\":\"macos-x86_64.tar.gz\",\"url\":\"${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${PACKAGE_NAME}-${CI_COMMIT_TAG}-x86_64-apple-darwin.tar.gz\",\"link_type\":\"package\"}" \
+        --assets-link "{\"name\":\"macos-aarch64.tar.gz\",\"url\":\"${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/${PACKAGE_NAME}-${CI_COMMIT_TAG}-aarch64-apple-darwin.tar.gz\",\"link_type\":\"package\"}"
