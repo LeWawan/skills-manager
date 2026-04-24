@@ -17,10 +17,19 @@ pub fn is_ours(dest: &Path, repo_dir: &Path) -> bool {
     if !dest.is_symlink() {
         return false;
     }
-    match fs::read_link(dest) {
-        Ok(target) => target.starts_with(repo_dir),
-        Err(_) => false,
+    let Ok(target) = fs::read_link(dest) else {
+        return false;
+    };
+    // Fast path: symlink points into the current catalogue.
+    if target.starts_with(repo_dir) {
+        return true;
     }
+    // Fallback: any symlink pointing into a recognisable catalogue layout
+    // counts as ours. Makes installs survive moving the catalogue or
+    // switching between a dev clone (cargo run) and the bundled binary.
+    let s = target.to_string_lossy();
+    let in_catalog = s.contains("/claude/.claude/") || s.contains("/opencode/.opencode/");
+    in_catalog && target.exists()
 }
 
 /// Compare contenu de deux chemins (fichier ou dir récursif).
@@ -214,6 +223,27 @@ mod tests {
         let link = f.target().join("link");
         unix_fs::symlink(&foreign_target, &link).unwrap();
         assert!(!is_ours(&link, f.repo()));
+    }
+
+    #[test]
+    fn is_ours_true_for_foreign_catalog_layout() {
+        // Simule: install faite via un autre clone (cargo run dans le repo
+        // dev) puis détection depuis le binary bundled. Les paths diffèrent
+        // mais la structure catalogue est reconnue.
+        let f = Fixture::new();
+        let target = f.target();
+        let other = TempDir::new().unwrap();
+        let catalog_file = other.path().join("claude/.claude/commands/x.md");
+        fs::create_dir_all(catalog_file.parent().unwrap()).unwrap();
+        fs::write(&catalog_file, "x").unwrap();
+
+        let link = target.join(".claude/commands/x.md");
+        fs::create_dir_all(link.parent().unwrap()).unwrap();
+        unix_fs::symlink(&catalog_file, &link).unwrap();
+
+        // repo_dir ne pointe PAS vers `other`, mais is_ours reconnait la
+        // structure catalogue et le fichier existe -> ours.
+        assert!(is_ours(&link, f.repo()));
     }
 
     #[test]
