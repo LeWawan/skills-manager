@@ -1,8 +1,13 @@
 name: Release assets
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v0.1.0)'
+        required: true
 
 permissions:
   contents: write
@@ -34,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -65,6 +70,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            dist/*.tar.gz dist/*.sha256 \
-            --clobber
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          # release-plz creates the GitHub Release in parallel; wait up to 60s for it
+          for _ in $(seq 1 30); do
+            if gh release view "$TAG" >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          gh release upload "$TAG" dist/*.tar.gz dist/*.sha256 --clobber
