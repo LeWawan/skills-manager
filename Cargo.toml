@@ -7,7 +7,6 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/LeWawan/skills-manager"
 homepage = "https://github.com/LeWawan/skills-manager"
-publish = false
 
 [profile.release]
 lto = "thin"
