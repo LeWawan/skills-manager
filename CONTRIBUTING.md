@@ -17,7 +17,15 @@ Requirements: Rust stable (1.79+), `git`. No other runtime dependency.
 
 ## Testing
 
-The same checks CI runs:
+A `justfile` ships with the repo to run the same checks as CI in one command. Install [`just`](https://github.com/casey/just) (`brew install just`), then:
+
+```bash
+just            # list available recipes
+just check      # run fmt + clippy + tests (same as CI)
+just fix        # auto-fix formatting and clippy lints
+```
+
+Or invoke cargo directly:
 
 ```bash
 cargo fmt --all -- --check
