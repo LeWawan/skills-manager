@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Backup directories (created during installation)
+.claude.bak/
+.opencode.bak/
+
+# OpenCode runtime artifacts
+opencode/.opencode/node_modules/
+opencode/.opencode/package.json
+opencode/.opencode/package-lock.json
+opencode/.opencode/bun.lock
+opencode/.opencode/.gitignore
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Cargo
+/target
+
+# CI artifacts
+/dist
+
+# Stray local build outputs
+/skills-manager
+/skills-manager-*.tar.gz
+/skills-manager-*.tar.gz.sha256
+/skills-manager-*/

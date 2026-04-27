@@ -1,0 +1,33 @@
+[workspace]
+# Don't publish to crates.io — this is a binary distribution, not a library
+publish = false
+# Conventional commits drive version bumps + changelog
+git_release_enable = true
+git_release_type = "auto"
+semver_check = false
+
+[changelog]
+# git-cliff config — group commits by Conventional Commit type
+header = "# Changelog\n\nAll notable changes to this project will be documented in this file.\n"
+body = """
+## [{{ version }}]{%- if release_link -%}({{ release_link }}){% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}*({{ commit.scope }})* {% endif %}{{ commit.message | upper_first }}{% if commit.breaking %} [**breaking**]{% endif %}
+{%- endfor %}
+{% endfor %}
+"""
+trim = true
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^test", group = "Tests" },
+  { message = "^build", group = "Build System" },
+  { message = "^ci", group = "CI/CD" },
+  { message = "^chore", group = "Maintenance" },
+  { message = "^style", group = "Styles" },
+]

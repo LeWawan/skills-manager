@@ -1,0 +1,70 @@
+name: Release assets
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+env:
+  BINARY_NAME: skills-manager
+  PACKAGE_NAME: skills-manager
+
+jobs:
+  build:
+    name: build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - platform: linux-aarch64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - platform: macos-x86_64
+            target: x86_64-apple-darwin
+            runner: macos-13
+          - platform: macos-aarch64
+            target: aarch64-apple-darwin
+            runner: macos-14
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="dist/${PACKAGE_NAME}-${{ matrix.platform }}"
+          mkdir -p "$STAGE"
+          cp "target/${{ matrix.target }}/release/${BINARY_NAME}" "$STAGE/"
+          cp -R claude opencode "$STAGE/"
+          cp LICENSE README.md "$STAGE/"
+          ARCHIVE="${PACKAGE_NAME}-${{ matrix.platform }}.tar.gz"
+          tar -C dist -czf "dist/${ARCHIVE}" "${PACKAGE_NAME}-${{ matrix.platform }}"
+          rm -rf "$STAGE"
+          (cd dist && shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256")
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            dist/*.tar.gz dist/*.sha256 \
+            --clobber
