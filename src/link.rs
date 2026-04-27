@@ -7,10 +7,10 @@ use std::path::Path;
 /// Résultat d'une opération de link pour permettre au caller de compter/abort.
 #[derive(Debug, PartialEq)]
 pub enum LinkOutcome {
-    Linked,       // nouveau symlink créé
-    AlreadyOurs,  // déjà un symlink vers nous
-    Migrated,     // remplacé un fichier existant
-    Aborted,      // user a refusé la migration
+    Linked,      // nouveau symlink créé
+    AlreadyOurs, // déjà un symlink vers nous
+    Migrated,    // remplacé un fichier existant
+    Aborted,     // user a refusé la migration
 }
 
 pub fn is_ours(dest: &Path, repo_dir: &Path) -> bool {
@@ -207,8 +207,12 @@ mod tests {
     use crate::test_fixtures::Fixture;
     use tempfile::TempDir;
 
-    fn always_yes(_: &str) -> bool { true }
-    fn always_no(_: &str) -> bool { false }
+    fn always_yes(_: &str) -> bool {
+        true
+    }
+    fn always_no(_: &str) -> bool {
+        false
+    }
 
     #[test]
     fn is_ours_false_for_missing() {
@@ -250,7 +254,10 @@ mod tests {
     fn is_ours_true_for_our_symlink() {
         let f = Fixture::new();
         let target = f.target();
-        let item = Item { category: "commands".into(), name: "caveman".into() };
+        let item = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         link_item(&item, f.repo(), &target, "claude", &always_yes).unwrap();
         let dest = item.dest_path(&target, "claude");
         assert!(is_ours(&dest, f.repo()));
@@ -305,7 +312,10 @@ mod tests {
     fn link_item_creates_symlink() {
         let f = Fixture::new();
         let target = f.target();
-        let item = Item { category: "commands".into(), name: "caveman".into() };
+        let item = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         let outcome = link_item(&item, f.repo(), &target, "claude", &always_yes).unwrap();
         assert_eq!(outcome, LinkOutcome::Linked);
         let dest = item.dest_path(&target, "claude");
@@ -317,7 +327,10 @@ mod tests {
     fn link_item_idempotent_for_ours() {
         let f = Fixture::new();
         let target = f.target();
-        let item = Item { category: "commands".into(), name: "caveman".into() };
+        let item = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         link_item(&item, f.repo(), &target, "claude", &always_yes).unwrap();
         let outcome = link_item(&item, f.repo(), &target, "claude", &always_no).unwrap();
         assert_eq!(outcome, LinkOutcome::AlreadyOurs);
@@ -327,7 +340,10 @@ mod tests {
     fn link_item_migrates_existing_with_confirm() {
         let f = Fixture::new();
         let target = f.target();
-        let item = Item { category: "commands".into(), name: "caveman".into() };
+        let item = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         let dest = item.dest_path(&target, "claude");
         fs::create_dir_all(dest.parent().unwrap()).unwrap();
         fs::write(&dest, "foreign content").unwrap();
@@ -341,7 +357,10 @@ mod tests {
     fn link_item_aborts_when_user_refuses() {
         let f = Fixture::new();
         let target = f.target();
-        let item = Item { category: "commands".into(), name: "caveman".into() };
+        let item = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         let dest = item.dest_path(&target, "claude");
         fs::create_dir_all(dest.parent().unwrap()).unwrap();
         fs::write(&dest, "foreign content").unwrap();
@@ -355,7 +374,10 @@ mod tests {
     fn unlink_item_removes_ours() {
         let f = Fixture::new();
         let target = f.target();
-        let item = Item { category: "commands".into(), name: "caveman".into() };
+        let item = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         link_item(&item, f.repo(), &target, "claude", &always_yes).unwrap();
         let removed = unlink_item(&item, f.repo(), &target, "claude").unwrap();
         assert!(removed);
@@ -366,7 +388,10 @@ mod tests {
     fn unlink_item_leaves_foreign_alone() {
         let f = Fixture::new();
         let target = f.target();
-        let item = Item { category: "commands".into(), name: "caveman".into() };
+        let item = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         let dest = item.dest_path(&target, "claude");
         fs::create_dir_all(dest.parent().unwrap()).unwrap();
         fs::write(&dest, "foreign").unwrap();

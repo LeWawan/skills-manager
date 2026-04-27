@@ -56,9 +56,7 @@ enum Command {
 fn main() -> Result<()> {
     let cli_args = Cli::parse();
     let repo_dir = resolve_repo_dir()?;
-    let target: PathBuf = env::var("HOME")
-        .context("HOME not set")?
-        .into();
+    let target: PathBuf = env::var("HOME").context("HOME not set")?.into();
 
     match cli_args.command.unwrap_or(Command::Run) {
         Command::Run => ui::run(&repo_dir, &target)?,

@@ -7,6 +7,7 @@ use std::path::Path;
 /// - Parse frontmatter (name, description)
 /// - Génère SKILL.md avec frontmatter étendu + body
 /// - Supprime skills orphelins (plus de commande source)
+///
 /// Skip: fichiers `shape-up*` (gérés séparément).
 pub fn run(repo_dir: &Path) -> Result<()> {
     let src_dir = repo_dir.join("claude/.claude/commands");
@@ -15,9 +16,7 @@ pub fn run(repo_dir: &Path) -> Result<()> {
 
     let mut expected: HashSet<String> = HashSet::new();
 
-    for entry in fs::read_dir(&src_dir)
-        .with_context(|| format!("read {}", src_dir.display()))?
-    {
+    for entry in fs::read_dir(&src_dir).with_context(|| format!("read {}", src_dir.display()))? {
         let entry = entry?;
         let path = entry.path();
         if path.extension().map(|e| e != "md").unwrap_or(true) {
@@ -73,7 +72,10 @@ pub fn run(repo_dir: &Path) -> Result<()> {
         }
     }
 
-    println!("\nConversion complete! Skills created in {}", dst_dir.display());
+    println!(
+        "\nConversion complete! Skills created in {}",
+        dst_dir.display()
+    );
     Ok(())
 }
 

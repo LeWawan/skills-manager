@@ -57,7 +57,7 @@ pub fn list_all(repo_dir: &Path, cli: &str) -> Result<Vec<Item>> {
         }
     }
 
-    items.sort_by(|a, b| a.id().cmp(&b.id()));
+    items.sort_by_key(|a| a.id());
     Ok(items)
 }
 
@@ -79,26 +79,26 @@ pub fn desc_of(repo_dir: &Path, cli: &str, item: &Item) -> Option<String> {
             }
             continue;
         }
-        if in_frontmatter == 1 {
-            if let Some(rest) = line.strip_prefix("description:") {
-                let mut s = rest.trim().to_string();
-                // trim quotes éventuelles
-                s = s
-                    .trim_start_matches(|c| c == '"' || c == '\'')
-                    .trim_end_matches(|c| c == '"' || c == '\'')
-                    .to_string();
-                // première phrase
-                if let Some(idx) = s.find(". ") {
-                    s.truncate(idx);
-                }
-                let s = s.replace(',', ";");
-                let s = if s.len() > 120 {
-                    format!("{}...", &s[..117])
-                } else {
-                    s
-                };
-                return Some(s);
+        if in_frontmatter == 1
+            && let Some(rest) = line.strip_prefix("description:")
+        {
+            let mut s = rest.trim().to_string();
+            // trim quotes éventuelles
+            s = s
+                .trim_start_matches(['"', '\''])
+                .trim_end_matches(['"', '\''])
+                .to_string();
+            // première phrase
+            if let Some(idx) = s.find(". ") {
+                s.truncate(idx);
             }
+            let s = s.replace(',', ";");
+            let s = if s.len() > 120 {
+                format!("{}...", &s[..117])
+            } else {
+                s
+            };
+            return Some(s);
         }
     }
     None
@@ -230,7 +230,10 @@ mod tests {
     #[test]
     fn desc_of_extracts_description() {
         let f = Fixture::new();
-        let it = Item { category: "commands".into(), name: "caveman".into() };
+        let it = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         let desc = desc_of(f.repo(), "claude", &it).unwrap();
         assert_eq!(desc, "Caveman mode");
     }
@@ -238,14 +241,20 @@ mod tests {
     #[test]
     fn desc_of_none_for_missing_file() {
         let f = Fixture::new();
-        let it = Item { category: "commands".into(), name: "nope".into() };
+        let it = Item {
+            category: "commands".into(),
+            name: "nope".into(),
+        };
         assert!(desc_of(f.repo(), "claude", &it).is_none());
     }
 
     #[test]
     fn deps_of_parses_claude_agent() {
         let f = Fixture::new();
-        let agent = Item { category: "agents".into(), name: "code-reviewer".into() };
+        let agent = Item {
+            category: "agents".into(),
+            name: "code-reviewer".into(),
+        };
         let deps = deps_of(f.repo(), "claude", &agent);
         assert_eq!(deps.len(), 1);
         assert_eq!(deps[0].id(), "commands/caveman");
@@ -254,7 +263,10 @@ mod tests {
     #[test]
     fn deps_of_parses_opencode_agent() {
         let f = Fixture::new();
-        let agent = Item { category: "agents".into(), name: "frontend-developer".into() };
+        let agent = Item {
+            category: "agents".into(),
+            name: "frontend-developer".into(),
+        };
         let deps = deps_of(f.repo(), "opencode", &agent);
         assert_eq!(deps.len(), 1);
         assert_eq!(deps[0].id(), "skills/caveman");
@@ -263,19 +275,28 @@ mod tests {
     #[test]
     fn deps_of_empty_for_non_agent() {
         let f = Fixture::new();
-        let it = Item { category: "commands".into(), name: "caveman".into() };
+        let it = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         assert!(deps_of(f.repo(), "claude", &it).is_empty());
     }
 
     #[test]
     fn is_standalone_matches_const() {
-        let it = Item { category: "commands".into(), name: "caveman".into() };
+        let it = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         assert!(is_standalone(&it));
     }
 
     #[test]
     fn is_standalone_false_for_other() {
-        let it = Item { category: "commands".into(), name: "postgres-patterns".into() };
+        let it = Item {
+            category: "commands".into(),
+            name: "postgres-patterns".into(),
+        };
         assert!(!is_standalone(&it));
     }
 

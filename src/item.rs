@@ -64,34 +64,49 @@ mod tests {
 
     #[test]
     fn id_roundtrip() {
-        let it = Item { category: "agents".into(), name: "code-reviewer".into() };
+        let it = Item {
+            category: "agents".into(),
+            name: "code-reviewer".into(),
+        };
         assert_eq!(it.id(), "agents/code-reviewer");
     }
 
     #[test]
     fn src_path_skill_is_dir() {
-        let it = Item { category: "skills".into(), name: "caveman".into() };
+        let it = Item {
+            category: "skills".into(),
+            name: "caveman".into(),
+        };
         let p = it.src_path(&PathBuf::from("/repo"), "opencode");
         assert_eq!(p, PathBuf::from("/repo/opencode/.opencode/skills/caveman"));
     }
 
     #[test]
     fn src_path_command_is_md_file() {
-        let it = Item { category: "commands".into(), name: "caveman".into() };
+        let it = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         let p = it.src_path(&PathBuf::from("/repo"), "claude");
         assert_eq!(p, PathBuf::from("/repo/claude/.claude/commands/caveman.md"));
     }
 
     #[test]
     fn dest_path_skill_under_home() {
-        let it = Item { category: "skills".into(), name: "caveman".into() };
+        let it = Item {
+            category: "skills".into(),
+            name: "caveman".into(),
+        };
         let p = it.dest_path(&PathBuf::from("/home/u"), "opencode");
         assert_eq!(p, PathBuf::from("/home/u/.opencode/skills/caveman"));
     }
 
     #[test]
     fn dest_path_command_is_md() {
-        let it = Item { category: "commands".into(), name: "caveman".into() };
+        let it = Item {
+            category: "commands".into(),
+            name: "caveman".into(),
+        };
         let p = it.dest_path(&PathBuf::from("/home/u"), "claude");
         assert_eq!(p, PathBuf::from("/home/u/.claude/commands/caveman.md"));
     }
