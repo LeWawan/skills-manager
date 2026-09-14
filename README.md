@@ -56,79 +56,25 @@ Sub-agents invoked automatically by Claude Code and OpenCode. Claude agents boot
 
 | Agent | Stack | Auto-loads |
 |-------|-------|------------|
-| `adonisjs-backend` | AdonisJS 6, Lucid ORM, VineJS | caveman, adonisjs-backend, backend-patterns, database-migrations, postgres-patterns, api-design, security-review |
-| `ruby-rails` | Ruby, Rails 7+, ActiveRecord | caveman, backend-patterns, database-migrations, postgres-patterns, api-design, security-review |
-| `swift-ios` | Swift 6+, SwiftUI, concurrency | caveman, swift-concurrency-6-2, swiftui-patterns, swift-actor-persistence, swift-protocol-di-testing |
-| `kotlin-android` | Kotlin, Jetpack Compose, coroutines | caveman, kotlin-patterns, kotlin-testing, kotlin-coroutines-flows |
-| `python-data` | Python, Airflow, dbt | caveman, python-patterns, python-testing, postgres-patterns, database-migrations |
-| `devops-infra` | OpenTofu, Docker, GitLab CI | caveman, docker-patterns, security-review |
-| `code-reviewer` | Multi-language | caveman, security-review, coding-standards |
-| `frontend-developer` | React, Vue, TypeScript | caveman, frontend-patterns, coding-standards, e2e-testing |
-| `typescript-pro` | TypeScript full-stack | caveman, coding-standards, backend-patterns, api-design |
-| `vue-expert` | Vue 3, Nuxt 3 | caveman, frontend-patterns, nuxt4-patterns, coding-standards, e2e-testing |
+| `code-reviewer` | Multi-language | caveman |
 
 ## Slash Commands
 
 Invoke with `/command-name` in Claude Code or OpenCode. Most commands are also available as OpenCode **skills** for on-demand loading via the `skill` tool. The three `shape-up*` commands remain slash-command only.
 
-### Swift / iOS
+### Modes
 
 | Command | Description |
 |---------|-------------|
-| `/swift-concurrency-6-2` | Swift 6.2 concurrency — `@concurrent`, isolated conformances |
-| `/swiftui-patterns` | SwiftUI architecture, `@Observable`, navigation, performance |
-| `/swift-actor-persistence` | Thread-safe persistence with actors |
-| `/swift-protocol-di-testing` | Protocol-based DI for testable Swift code |
-
-### Kotlin / Android
-
-| Command | Description |
-|---------|-------------|
-| `/kotlin-patterns` | Idiomatic Kotlin — coroutines, null safety, DSL builders |
-| `/kotlin-testing` | Kotest, MockK, coroutine testing, property-based testing |
-| `/kotlin-coroutines-flows` | Structured concurrency, Flow operators, StateFlow |
-
-### Python / Data
-
-| Command | Description |
-|---------|-------------|
-| `/python-patterns` | Pythonic idioms, PEP 8, type hints, best practices |
-| `/python-testing` | pytest, TDD, fixtures, mocking, parametrization |
-
-### Web / Frontend
-
-| Command | Description |
-|---------|-------------|
-| `/frontend-patterns` | React, Next.js, state management, performance |
-| `/nuxt4-patterns` | Nuxt 4 hydration safety, SSR-safe data fetching |
-| `/coding-standards` | Universal standards for TypeScript, React, Node.js |
 | `/caveman` | Ultra-compressed response mode, bilingual EN/FR in the same file |
+| `/ponytail` | Laziest working solution — YAGNI, reuse before writing, shortest diff |
+| `/unslop` | Cut AI tells from any writing |
 
-### Backend / API
-
-| Command | Description |
-|---------|-------------|
-| `/adonisjs-backend` | AdonisJS 6 — controllers, Lucid ORM, VineJS, auth, Bouncer, Japa tests |
-| `/api-design` | REST API design — resources, pagination, error responses |
-| `/backend-patterns` | Backend architecture, API design, DB optimization |
-| `/database-migrations` | Schema changes, rollbacks, zero-downtime deployments |
-| `/postgres-patterns` | Query optimization, indexing, schema design |
-
-### DevOps / Security
+### Code review
 
 | Command | Description |
 |---------|-------------|
-| `/docker-patterns` | Dockerfile best practices, Compose, multi-service orchestration |
-| `/security-review` | Auth, input handling, secrets, API security checklist |
-
-### Workflow
-
-| Command | Description |
-|---------|-------------|
-| `/tdd-workflow` | Test-driven development with 80%+ coverage |
-| `/e2e-testing` | Playwright E2E patterns, Page Object Model, CI/CD |
-| `/deep-research` | Multi-source research with citations |
-| `/verification-loop` | Comprehensive verification system for Claude Code sessions |
+| `/code-review` | Two-axis diff review (Standards + Spec) via parallel sub-agents |
 
 ### Product / Planning
 
@@ -137,6 +83,8 @@ Invoke with `/command-name` in Claude Code or OpenCode. Most commands are also a
 | `/shape-up` | Full Shape Up methodology for shaping, betting, and building |
 | `/shape-up-shape` | Shape raw ideas into ready-to-pitch projects |
 | `/shape-up-bet` | Run betting table and choose cycle work |
+| `/pitch-create` | Guide the creation of a Shape Up pitch from a raw idea |
+| `/pitch-review` | Gatekeep a written pitch before the betting table |
 
 ---
 

@@ -18,99 +18,40 @@ claude-skills/
 │
 ├── claude/                      # Claude Code package
 │   └── .claude/
-│       ├── agents/              # 9 specialized agents
-│       │   ├── code-reviewer.md
-│       │   ├── devops-infra.md
-│       │   ├── frontend-developer.md
-│       │   ├── kotlin-android.md
-│       │   ├── python-data.md
-│       │   ├── ruby-rails.md
-│       │   ├── swift-ios.md
-│       │   ├── typescript-pro.md
-│       │   └── vue-expert.md
+│       ├── agents/              # 1 specialized agent
+│       │   └── code-reviewer.md
 │       │
-│       └── commands/            # 26 slash commands
-│           ├── api-design.md
-│           ├── backend-patterns.md
-│           ├── coding-standards.md
+│       └── commands/            # 9 slash commands
 │           ├── caveman.md       # bilingual EN/FR skill in same file; FR keeps technical English terms
-│           ├── database-migrations.md
-│           ├── deep-research.md
-│           ├── docker-patterns.md
-│           ├── e2e-testing.md
-│           ├── frontend-patterns.md
-│           ├── kotlin-coroutines-flows.md
-│           ├── kotlin-patterns.md
-│           ├── kotlin-testing.md
-│           ├── nuxt4-patterns.md
-│           ├── postgres-patterns.md
-│           ├── python-patterns.md
-│           ├── python-testing.md
-│           ├── security-review.md
+│           ├── code-review.md
+│           ├── pitch-create.md
+│           ├── pitch-review.md
+│           ├── ponytail.md
 │           ├── shape-up-bet.md
 │           ├── shape-up-shape.md
 │           ├── shape-up.md
-│           ├── swift-actor-persistence.md
-│           ├── swift-concurrency-6-2.md
-│           ├── swift-protocol-di-testing.md
-│           ├── swiftui-patterns.md
-│           ├── tdd-workflow.md
-│           └── verification-loop.md
+│           └── unslop.md
 │
 └── opencode/                    # OpenCode package
     └── .opencode/
-        ├── agents/              # 9 specialized agents (same names as Claude)
+        ├── agents/              # 1 specialized agent (same names as Claude)
         │   └── [same files as claude/agents/]
         │
-        ├── commands/            # 26 slash commands (same names as Claude)
+        ├── commands/            # 9 slash commands (same names as Claude)
         │   └── [same files as claude/commands/]
         │
-        ├── skills/              # 23 skills (OpenCode-specific)
-        │   ├── api-design/
-        │   │   └── SKILL.md
-        │   ├── backend-patterns/
-        │   │   └── SKILL.md
-        │   ├── coding-standards/
-        │   │   └── SKILL.md
+        ├── skills/              # 6 skills (OpenCode-specific)
         │   ├── caveman/
         │   │   └── SKILL.md       # bilingual EN/FR skill in same file; FR keeps technical English terms
-        │   ├── database-migrations/
+        │   ├── code-review/
         │   │   └── SKILL.md
-        │   ├── deep-research/
+        │   ├── pitch-create/
         │   │   └── SKILL.md
-        │   ├── docker-patterns/
+        │   ├── pitch-review/
         │   │   └── SKILL.md
-        │   ├── e2e-testing/
+        │   ├── ponytail/
         │   │   └── SKILL.md
-        │   ├── frontend-patterns/
-        │   │   └── SKILL.md
-        │   ├── kotlin-coroutines-flows/
-        │   │   └── SKILL.md
-        │   ├── kotlin-patterns/
-        │   │   └── SKILL.md
-        │   ├── kotlin-testing/
-        │   │   └── SKILL.md
-        │   ├── nuxt4-patterns/
-        │   │   └── SKILL.md
-        │   ├── postgres-patterns/
-        │   │   └── SKILL.md
-        │   ├── python-patterns/
-        │   │   └── SKILL.md
-        │   ├── python-testing/
-        │   │   └── SKILL.md
-        │   ├── security-review/
-        │   │   └── SKILL.md
-        │   ├── swift-actor-persistence/
-        │   │   └── SKILL.md
-        │   ├── swift-concurrency-6-2/
-        │   │   └── SKILL.md
-        │   ├── swift-protocol-di-testing/
-        │   │   └── SKILL.md
-        │   ├── swiftui-patterns/
-        │   │   └── SKILL.md
-        │   ├── tdd-workflow/
-        │   │   └── SKILL.md
-        │   └── verification-loop/
+        │   └── unslop/
         │       └── SKILL.md
         └── (node_modules/, package.json — runtime artifacts, git-ignored)
 ```
@@ -134,11 +75,11 @@ Each item is symlinked individually (file-level for agents/commands, directory-l
 
 ## File Counts
 
-- **Agents**: 9 (identical for both CLIs)
-- **Commands**: 26 per CLI
-- **Skills**: 23 (OpenCode only, converted from commands)
+- **Agents**: 1 (identical for both CLIs)
+- **Commands**: 9 per CLI
+- **Skills**: 6 (OpenCode only, converted from commands)
 
 Notes:
 
 - OpenCode skills intentionally exclude `shape-up`, `shape-up-shape`, and `shape-up-bet`
-- Total tracked instruction files: 9 Claude agents + 26 Claude commands + 9 OpenCode agents + 26 OpenCode commands + 23 OpenCode skills = **93 files**
+- Total tracked instruction files: 1 Claude agent + 9 Claude commands + 1 OpenCode agent + 9 OpenCode commands + 6 OpenCode skills = **26 files**
